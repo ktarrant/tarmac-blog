@@ -6,8 +6,8 @@ import { withBase } from "../lib/withBase";
 export async function GET(context: APIContext) {
   const entries = await getCollection("investigations", ({ data }) => !data.draft);
   return rss({
-    title: "Tarmac",
-    description: "A landing strip for curious investigations.",
+    title: "tarmac",
+    description: "Data investigations and visualizations",
     site: context.site!,
     items: entries.map((entry) => ({
       title: entry.data.title,

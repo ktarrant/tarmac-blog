@@ -9,7 +9,7 @@ interface Props {
   description?: string;
 }
 
-const { title, description = "A landing strip for curious investigations." } = Astro.props;
+const { title, description = "Data investigations and visualizations" } = Astro.props;
 ---
 
 <!doctype html>
@@ -19,7 +19,7 @@ const { title, description = "A landing strip for curious investigations." } = A
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/svg+xml" href={withBase("/favicon.svg")} />
     <meta name="generator" content={Astro.generator} />
-    <title>{title} · Tarmac</title>
+    <title>{title} · tarmac</title>
     <meta name="description" content={description} />
   </head>
   <body>
