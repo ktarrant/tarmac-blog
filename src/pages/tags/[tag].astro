@@ -1,0 +1,51 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import InvestigationCard from "../../components/site/InvestigationCard.astro";
+
+export async function getStaticPaths() {
+  const entries = await getCollection("investigations", ({ data }) => !data.draft);
+  const tags = [...new Set(entries.flatMap((e) => e.data.tags))];
+  return tags.map((tag) => ({
+    params: { tag },
+    props: { entries: entries.filter((e) => e.data.tags.includes(tag)) },
+  }));
+}
+
+const { tag } = Astro.params;
+const { entries } = Astro.props;
+const sorted = entries.sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+---
+
+<BaseLayout title={`#${tag}`}>
+  <section class="page">
+    <h1>#{tag}</h1>
+    <div class="grid">
+      {sorted.map((entry) => (
+        <InvestigationCard
+          slug={entry.id}
+          title={entry.data.title}
+          summary={entry.data.summary}
+          date={entry.data.date}
+          tags={entry.data.tags}
+          cover={entry.data.cover}
+        />
+      ))}
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .page {
+    max-width: var(--measure-wide);
+    margin: 2rem auto 4rem;
+    padding: 0 1rem;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+  }
+</style>

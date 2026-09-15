@@ -1,0 +1,56 @@
+---
+title: "Hello, Runway"
+summary: "A short flight test of the Tarmac stack — dark theme, an ECharts island, and cross-chart state, before the first real investigation lands."
+date: 2026-09-15
+tags: ["meta"]
+featured: true
+draft: false
+---
+
+import ChartFrame from "../../../components/charts/ChartFrame.astro";
+import DemoChart from "../../../components/investigations/hello-runway/DemoChart.svelte";
+import Callout from "../../../components/site/Callout.astro";
+
+Every investigation on this site starts the same way: a documented data pipeline,
+a handful of interactive charts, and prose that explains what you're looking at.
+This post is the pre-flight check — it exercises the chart wrapper, the dark
+theme, and the shared state store before "How States Spend, Save, and Borrow"
+takes off.
+
+## A chart, for demonstration purposes
+
+Nothing here is a real dataset — just a week of made-up flight departures, rendered
+through the same `EChart` component and `tarmac` ECharts theme every future chart
+will use.
+
+<ChartFrame
+  title="Weekday departures (demo data)"
+  takeaway="Departures peak midweek and drop off on the weekend — made-up numbers, real chart plumbing."
+  table={{
+    headers: ["Day", "Departures"],
+    rows: [
+      ["Mon", 412],
+      ["Tue", 438],
+      ["Wed", 455],
+      ["Thu", 470],
+      ["Fri", 510],
+      ["Sat", 305],
+      ["Sun", 268],
+    ],
+  }}
+>
+  <DemoChart client:visible />
+</ChartFrame>
+
+<Callout>
+  Hover a bar above — it writes to a shared `nanostores` atom, the same mechanism
+  that will later link the state map to the ranking chart in the budgets
+  investigation.
+</Callout>
+
+## What's next
+
+The real first investigation, "How States Spend, Save, and Borrow," is next up:
+a Python data pipeline pulling Census and NASBO figures into committed JSON, and
+a full set of choropleths, treemaps, and per-state pages built on this same
+foundation.

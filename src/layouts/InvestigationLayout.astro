@@ -1,0 +1,72 @@
+---
+import BaseLayout from "./BaseLayout.astro";
+import TagList from "../components/site/TagList.astro";
+import TOC from "../components/site/TOC.astro";
+import "../styles/prose.css";
+
+interface Props {
+  title: string;
+  summary: string;
+  date: Date;
+  updated?: Date;
+  tags: string[];
+  headings: { depth: number; slug: string; text: string }[];
+}
+
+const { title, summary, date, updated, tags, headings } = Astro.props;
+const formattedDate = date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+---
+
+<BaseLayout title={title} description={summary}>
+  <article class="investigation">
+    <header class="prose">
+      <h1>{title}</h1>
+      <p class="summary">{summary}</p>
+      <div class="byline">
+        <time datetime={date.toISOString()}>{formattedDate}</time>
+        {updated && <span> · updated {updated.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</span>}
+      </div>
+      <TagList tags={tags} />
+    </header>
+    <div class="layout-grid">
+      <TOC headings={headings} />
+      <div class="prose">
+        <slot />
+      </div>
+    </div>
+  </article>
+</BaseLayout>
+
+<style>
+  .investigation {
+    padding: 2rem 1rem 4rem;
+  }
+
+  .investigation header.prose {
+    margin-bottom: 2rem;
+  }
+
+  .summary {
+    color: var(--color-text-secondary);
+    font-size: 1.1rem;
+  }
+
+  .byline {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+  }
+
+  .layout-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+
+  @media (min-width: 1100px) {
+    .layout-grid {
+      grid-template-columns: 180px 1fr;
+      align-items: start;
+    }
+  }
+</style>

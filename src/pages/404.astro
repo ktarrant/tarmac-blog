@@ -1,0 +1,26 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { withBase } from "../lib/withBase";
+---
+
+<BaseLayout title="Not found">
+  <section class="not-found">
+    <h1>404</h1>
+    <p>This runway doesn't exist.</p>
+    <a href={withBase("/")}>Back to the home page</a>
+  </section>
+</BaseLayout>
+
+<style>
+  .not-found {
+    max-width: var(--measure-wide);
+    margin: 4rem auto;
+    padding: 0 1rem;
+    text-align: center;
+  }
+
+  .not-found h1 {
+    font-size: 4rem;
+    color: var(--color-accent);
+  }
+</style>

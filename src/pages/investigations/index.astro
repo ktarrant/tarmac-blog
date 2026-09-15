@@ -1,0 +1,93 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import InvestigationCard from "../../components/site/InvestigationCard.astro";
+
+const entries = (await getCollection("investigations", ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf()
+);
+const tags = [...new Set(entries.flatMap((e) => e.data.tags))].sort();
+---
+
+<BaseLayout title="Investigations">
+  <section class="page">
+    <h1>Investigations</h1>
+
+    {tags.length > 0 && (
+      <div class="filters" role="group" aria-label="Filter by tag">
+        <button class="filter-btn active" data-tag="all">All</button>
+        {tags.map((tag) => (
+          <button class="filter-btn" data-tag={tag}>#{tag}</button>
+        ))}
+      </div>
+    )}
+
+    <div class="grid">
+      {entries.map((entry) => (
+        <div class="card-wrap" data-tags={entry.data.tags.join(",")}>
+          <InvestigationCard
+            slug={entry.id}
+            title={entry.data.title}
+            summary={entry.data.summary}
+            date={entry.data.date}
+            tags={entry.data.tags}
+            cover={entry.data.cover}
+          />
+        </div>
+      ))}
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .page {
+    max-width: var(--measure-wide);
+    margin: 2rem auto 4rem;
+    padding: 0 1rem;
+  }
+
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 1.5rem 0;
+  }
+
+  .filter-btn {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    border-radius: 999px;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+
+  .filter-btn.active {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+  }
+</style>
+
+<script>
+  const buttons = document.querySelectorAll<HTMLButtonElement>(".filter-btn");
+  const cards = document.querySelectorAll<HTMLElement>(".card-wrap");
+
+  buttons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      buttons.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const tag = btn.dataset.tag;
+      cards.forEach((card) => {
+        const tags = card.dataset.tags?.split(",") ?? [];
+        card.hidden = tag !== "all" && !tags.includes(tag!);
+      });
+    });
+  });
+</script>

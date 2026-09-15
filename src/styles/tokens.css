@@ -1,0 +1,48 @@
+/* Tarmac design tokens — dark-only theme. */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --color-bg: #0e1116;
+  --color-surface: #161b22;
+  --color-surface-raised: #1c2229;
+  --color-border: rgba(255, 255, 255, 0.1);
+
+  /* Ink */
+  --color-text: #eef1f5;
+  --color-text-secondary: #a8b0bb;
+  --color-text-muted: #6b7280;
+
+  /* Accent */
+  --color-accent: #f2b632;
+  --color-accent-ink: #1a1400;
+
+  /* Party colors (validated against --color-bg, see dataviz palette check) */
+  --color-party-dem: #3987e5;
+  --color-party-gop: #e66767;
+
+  /* Chart categorical palette, fixed order — never cycled or reassigned */
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
+
+  /* Status (fixed, never themed) */
+  --color-good: #0ca30c;
+  --color-warning: #fab219;
+  --color-serious: #ec835a;
+  --color-critical: #d03b3b;
+
+  /* Type */
+  --font-heading: "Space Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Layout */
+  --measure-prose: 70ch;
+  --measure-wide: 1100px;
+  --radius: 6px;
+}

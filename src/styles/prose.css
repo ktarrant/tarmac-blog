@@ -1,0 +1,54 @@
+.prose {
+  max-width: var(--measure-prose);
+  margin-inline: auto;
+  font-size: 1.05rem;
+}
+
+.prose > * + * {
+  margin-top: 1.25em;
+}
+
+.prose h2 {
+  margin-top: 2em;
+  font-size: 1.5rem;
+}
+
+.prose h3 {
+  margin-top: 1.5em;
+  font-size: 1.15rem;
+}
+
+.prose p, .prose li {
+  color: var(--color-text-secondary);
+}
+
+.prose strong {
+  color: var(--color-text);
+}
+
+.prose code {
+  background: var(--color-surface);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-size: 0.9em;
+}
+
+.prose blockquote {
+  margin: 0;
+  padding-left: 1em;
+  border-left: 2px solid var(--color-accent);
+  color: var(--color-text-secondary);
+}
+
+/* A chart or figure can break out wider than the prose column. */
+.prose .breakout {
+  max-width: var(--measure-wide);
+  width: 100%;
+  margin-inline: auto;
+}
+
+@media (min-width: 1164px) {
+  .prose .breakout {
+    margin-inline: calc((var(--measure-prose) - var(--measure-wide)) / 2);
+  }
+}

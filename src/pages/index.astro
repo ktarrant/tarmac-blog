@@ -1,0 +1,80 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import InvestigationCard from "../components/site/InvestigationCard.astro";
+
+const entries = (await getCollection("investigations", ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf()
+);
+const featured = entries.find((e) => e.data.featured) ?? entries[0];
+const rest = entries.filter((e) => e.id !== featured?.id);
+---
+
+<BaseLayout title="Home">
+  <section class="hero">
+    <h1>Tarmac<span class="dot">.</span></h1>
+    <p>A landing strip for curious investigations.</p>
+  </section>
+
+  {featured && (
+    <section class="featured">
+      <InvestigationCard
+        slug={featured.id}
+        title={featured.data.title}
+        summary={featured.data.summary}
+        date={featured.data.date}
+        tags={featured.data.tags}
+        cover={featured.data.cover}
+      />
+    </section>
+  )}
+
+  {rest.length > 0 && (
+    <section class="grid">
+      {rest.map((entry) => (
+        <InvestigationCard
+          slug={entry.id}
+          title={entry.data.title}
+          summary={entry.data.summary}
+          date={entry.data.date}
+          tags={entry.data.tags}
+          cover={entry.data.cover}
+        />
+      ))}
+    </section>
+  )}
+</BaseLayout>
+
+<style>
+  .hero {
+    max-width: var(--measure-wide);
+    margin: 2rem auto 3rem;
+    padding: 0 1rem;
+  }
+
+  .hero h1 {
+    font-size: 3rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .hero .dot {
+    color: var(--color-accent);
+  }
+
+  .hero p {
+    color: var(--color-text-secondary);
+    font-size: 1.2rem;
+  }
+
+  .featured, .grid {
+    max-width: var(--measure-wide);
+    margin: 0 auto 2rem;
+    padding: 0 1rem;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+  }
+</style>

@@ -1,0 +1,36 @@
+---
+const year = new Date().getFullYear();
+---
+
+<footer class="site-footer">
+  <p>
+    Tarmac — a landing strip for curious investigations. Article text and charts are
+    CC BY 4.0 unless noted; code is GPL-3.0.
+  </p>
+  <p>
+    <a href="https://github.com/ktarrant/tarmac-blog">Source on GitHub</a> · &copy; {year} Kevin Tarrant
+  </p>
+</footer>
+
+<style>
+  .site-footer {
+    max-width: var(--measure-wide);
+    margin: 3rem auto 0;
+    padding: 1.5rem 1rem 2.5rem;
+    border-top: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+  }
+
+  .site-footer p {
+    margin: 0.35rem 0;
+  }
+
+  .site-footer a {
+    color: var(--color-text-muted);
+  }
+
+  .site-footer a:hover {
+    color: var(--color-accent);
+  }
+</style>

@@ -1,0 +1,100 @@
+---
+interface Props {
+  title: string;
+  takeaway?: string;
+  source?: { label: string; href: string };
+  wide?: boolean;
+  table?: { headers: string[]; rows: (string | number)[][] };
+}
+
+const { title, takeaway, source, wide = false, table } = Astro.props;
+---
+
+<figure class:list={["chart-frame", { breakout: wide }]}>
+  <figcaption>
+    <h3>{title}</h3>
+    {takeaway && <p class="takeaway">{takeaway}</p>}
+  </figcaption>
+  <div class="chart-slot">
+    <slot />
+  </div>
+  <footer>
+    {source && (
+      <p class="source">
+        Source: <a href={source.href}>{source.label}</a>
+      </p>
+    )}
+    {table && (
+      <details>
+        <summary>View data table</summary>
+        <table>
+          <thead>
+            <tr>
+              {table.headers.map((h) => <th>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {table.rows.map((row) => (
+              <tr>
+                {row.map((cell) => <td>{cell}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
+    )}
+  </footer>
+</figure>
+
+<style>
+  .chart-frame {
+    margin: 2rem 0;
+    padding: 1.25rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+  }
+
+  figcaption h3 {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+
+  .takeaway {
+    margin: 0.25rem 0 0;
+    color: var(--color-text-secondary);
+  }
+
+  .chart-slot {
+    margin-top: 1rem;
+  }
+
+  footer {
+    margin-top: 0.75rem;
+  }
+
+  .source {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  details {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.5rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+</style>

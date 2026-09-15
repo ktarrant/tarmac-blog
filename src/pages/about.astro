@@ -1,0 +1,29 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import "../styles/prose.css";
+---
+
+<BaseLayout title="About">
+  <section class="prose page">
+    <h1>About Tarmac</h1>
+    <p>
+      Tarmac is a landing strip for curious investigations — data-driven deep dives
+      where the interactive charts are the point, not an illustration bolted onto
+      the prose.
+    </p>
+    <p>
+      Each investigation is built from a documented data pipeline, with sources and
+      methodology notes alongside the charts so you can check the work.
+    </p>
+    <p>
+      Site by <a href="https://github.com/ktarrant">Kevin Tarrant</a>. Article text
+      and charts are CC BY 4.0 unless noted; the code is GPL-3.0.
+    </p>
+  </section>
+</BaseLayout>
+
+<style>
+  .page {
+    padding: 2rem 1rem 4rem;
+  }
+</style>

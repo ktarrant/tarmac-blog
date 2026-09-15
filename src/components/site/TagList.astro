@@ -1,0 +1,50 @@
+---
+import { withBase } from "../../lib/withBase";
+
+interface Props {
+  tags: string[];
+  /** Set false when nesting inside another link (e.g. a card) — a tag can't be its own nested <a>. */
+  linked?: boolean;
+}
+
+const { tags, linked = true } = Astro.props;
+const Tag = linked ? "a" : "span";
+---
+
+{tags.length > 0 && (
+  <ul class="tag-list">
+    {tags.map((tag) => (
+      <li>
+        <Tag href={linked ? withBase(`/tags/${tag}/`) : undefined}>#{tag}</Tag>
+      </li>
+    ))}
+  </ul>
+)}
+
+<style>
+  .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .tag-list a,
+  .tag-list span {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-size: 0.8rem;
+    text-decoration: none;
+  }
+
+  .tag-list a:hover {
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+</style>

@@ -1,0 +1,52 @@
+---
+import { withBase } from "../../lib/withBase";
+---
+
+<header class="site-header">
+  <a class="wordmark" href={withBase("/")}>
+    Tarmac<span class="dot">.</span>
+  </a>
+  <nav>
+    <a href={withBase("/investigations/")}>Investigations</a>
+    <a href={withBase("/about/")}>About</a>
+  </nav>
+</header>
+
+<style>
+  .site-header {
+    max-width: var(--measure-wide);
+    margin: 0 auto;
+    padding: 1.5rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .wordmark {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: var(--color-text);
+    text-decoration: none;
+  }
+
+  .dot {
+    color: var(--color-accent);
+  }
+
+  nav {
+    display: flex;
+    gap: 1.5rem;
+  }
+
+  nav a {
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    font-size: 0.95rem;
+  }
+
+  nav a:hover {
+    color: var(--color-text);
+  }
+</style>

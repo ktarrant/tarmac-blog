@@ -1,0 +1,78 @@
+---
+import { withBase } from "../../lib/withBase";
+import TagList from "./TagList.astro";
+
+interface Props {
+  slug: string;
+  title: string;
+  summary: string;
+  date: Date;
+  tags: string[];
+  cover?: string;
+}
+
+const { slug, title, summary, date, tags, cover } = Astro.props;
+const formattedDate = date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+---
+
+<a class="card" href={withBase(`/investigations/${slug}/`)}>
+  {cover && <img src={cover} alt="" loading="lazy" />}
+  <div class="card-body">
+    <h3>{title}</h3>
+    <p>{summary}</p>
+    <div class="meta">
+      <time datetime={date.toISOString()}>{formattedDate}</time>
+      <TagList tags={tags} linked={false} />
+    </div>
+  </div>
+</a>
+
+<style>
+  .card {
+    display: block;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    color: var(--color-text);
+    text-decoration: none;
+    transition: border-color 0.15s ease;
+  }
+
+  .card:hover {
+    border-color: var(--color-accent);
+  }
+
+  .card img {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    display: block;
+  }
+
+  .card-body {
+    padding: 1.25rem;
+  }
+
+  .card-body h3 {
+    margin: 0 0 0.4rem;
+    font-size: 1.15rem;
+  }
+
+  .card-body p {
+    margin: 0 0 1rem;
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
+  }
+
+  .meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .meta time {
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+  }
+</style>
