@@ -38,5 +38,18 @@ def test_http_errors_do_not_leak_the_key():
     assert "REDACTED" in redacted
 
 
+def test_html_error_page_is_rejected_rather_than_cached():
+    """The Census API answers a bad key with HTTP 200 and an HTML page, so
+    without this guard an error page gets cached as if it were data."""
+    body = "<html><head><title>Invalid Key</title></head><body>...</body></html>"
+
+    with pytest.raises(RuntimeError, match="Invalid Key"):
+        fetch._reject_non_json(body, "https://api.census.gov/data/timeseries/govsstatefin")
+
+
+def test_valid_json_passes_through():
+    fetch._reject_non_json('[["AMOUNT","ITEM_CODE"],["100","E12"]]', "https://example.test")
+
+
 def _raise_file_not_found(*args, **kwargs):
     raise FileNotFoundError

@@ -7,7 +7,9 @@ here parses: see transform.py.
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import subprocess
 from functools import cache
 from pathlib import Path
@@ -51,7 +53,7 @@ SELECT ?stateLabel ?person ?personLabel ?partyLabel ?start ?end WHERE {
 """
 
 
-def _download(url: str, dest: Path, *, params: dict | None = None) -> Path:
+def _download(url: str, dest: Path, *, params: dict | None = None, expect_json: bool = False) -> Path:
     if dest.exists():
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -66,8 +68,25 @@ def _download(url: str, dest: Path, *, params: dict | None = None) -> Path:
             raise httpx.HTTPStatusError(
                 _redact(str(error), params), request=error.request, response=error.response
             ) from None
+        if expect_json:
+            _reject_non_json(response.text, url)
         dest.write_bytes(response.content)
     return dest
+
+
+def _reject_non_json(body: str, url: str) -> None:
+    """The Census API answers a bad key with an HTML page and HTTP 200, so a
+    status check alone would cache an error page as if it were data."""
+    try:
+        json.loads(body)
+    except json.JSONDecodeError:
+        title = re.search(r"<title>([^<]*)</title>", body, re.I)
+        reason = title.group(1).strip() if title else "response was not JSON"
+        raise RuntimeError(
+            f"{url} returned '{reason}' instead of data.\n"
+            "If this is an invalid/missing key: a new Census key must be activated "
+            "from the link in the signup email before it works."
+        ) from None
 
 
 def _redact(message: str, params: dict | None) -> str:
@@ -124,6 +143,7 @@ def state_finances(year: int) -> Path:
             "time": str(year),
             "key": census_api_key(),
         },
+        expect_json=True,
     )
 
 
