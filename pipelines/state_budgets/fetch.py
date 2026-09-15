@@ -8,6 +8,8 @@ here parses: see transform.py.
 from __future__ import annotations
 
 import os
+import subprocess
+from functools import cache
 from pathlib import Path
 
 import httpx
@@ -15,6 +17,7 @@ import httpx
 from .paths import RAW_DIR
 
 USER_AGENT = "tarmac-blog-pipeline/0.1 (https://github.com/ktarrant/tarmac-blog)"
+KEYCHAIN_SERVICE = "tarmac-census-api-key"
 
 # Census finance data is published per year under the survey's table directory,
 # with the filename varying by year (File/Files/file), so the year directory is
@@ -54,19 +57,56 @@ def _download(url: str, dest: Path, *, params: dict | None = None) -> Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
     with httpx.Client(follow_redirects=True, timeout=120, headers={"User-Agent": USER_AGENT}) as client:
         response = client.get(url, params=params)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as error:
+            # httpx puts the full request URL in the message, and the Census
+            # API takes its key as a query parameter — so an unhandled error
+            # would print the key into a traceback someone might paste.
+            raise httpx.HTTPStatusError(
+                _redact(str(error), params), request=error.request, response=error.response
+            ) from None
         dest.write_bytes(response.content)
     return dest
 
 
+def _redact(message: str, params: dict | None) -> str:
+    secret = (params or {}).get("key")
+    return message.replace(secret, "REDACTED") if secret else message
+
+
+@cache
 def census_api_key() -> str:
+    """The Census API key, from $CENSUS_API_KEY or the macOS Keychain.
+
+    The env var wins so CI and one-off runs can override without touching the
+    Keychain; the Keychain is the everyday path so the key never lands in a
+    shell profile or a file in the repo.
+    """
     key = os.environ.get("CENSUS_API_KEY")
-    if not key:
-        raise RuntimeError(
-            "CENSUS_API_KEY is not set. Get a free key at "
-            "https://api.census.gov/data/key_signup.html and export it."
+    if key:
+        return key
+
+    try:
+        result = subprocess.run(
+            ["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-w"],
+            capture_output=True,
+            text=True,
+            check=True,
         )
-    return key
+        if stored := result.stdout.strip():
+            return stored
+    except FileNotFoundError:
+        pass  # not macOS
+    except subprocess.CalledProcessError:
+        pass  # no such Keychain item
+
+    raise RuntimeError(
+        "No Census API key found. Get a free key at "
+        "https://api.census.gov/data/key_signup.html, then store it with:\n\n"
+        f'  security add-generic-password -a "$USER" -s {KEYCHAIN_SERVICE} -w "YOUR_KEY" -U\n\n'
+        "Or set CENSUS_API_KEY in the environment."
+    )
 
 
 def state_finances(year: int) -> Path:
