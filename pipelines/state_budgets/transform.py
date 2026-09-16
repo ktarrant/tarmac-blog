@@ -381,6 +381,26 @@ def build_states(
         by_component = by("component", "expenditure")
         revenue_by_source = by("component", "revenue")
 
+        # What the capital money actually built. The construction, land and
+        # equipment codes carry the same function digits as operating spending,
+        # so capital can be broken out by purpose — which is the only way to
+        # answer what borrowing pays for, since no source ties an individual
+        # bond to an individual project.
+        capital_rows = state.filter(
+            (pl.col("flow") == "expenditure")
+            & pl.col("component").map_elements(
+                lambda c: categories.BUDGET_SIDE.get(c) == "capital", return_dtype=pl.Boolean
+            )
+        )
+        capital_grouped = (
+            capital_rows.group_by(["function", "year"]).agg(pl.col("amount").sum())
+        )
+        capital_by_function = {}
+        for function in sorted(capital_grouped["function"].unique().to_list()):
+            rows_ = capital_grouped.filter(pl.col("function") == function)
+            lookup_ = dict(zip(rows_["year"].to_list(), rows_["amount"].to_list()))
+            capital_by_function[function] = [lookup_.get(year, 0) for year in years]
+
         # Operating and capital move for different reasons and are funded
         # differently, so the page needs them apart rather than as one total.
         spending_split = {"operating": [0] * len(years), "capital": [0] * len(years)}
@@ -417,6 +437,7 @@ def build_states(
             "expenditure_by_function": by_function,
             "expenditure_by_component": by_component,
             "spending_split": spending_split,
+            "capital_by_function": capital_by_function,
             "debt_service": by_component.get("interest_on_debt", [0] * len(years)),
             "revenue_by_source": revenue_by_source,
             "debt": debt_out,

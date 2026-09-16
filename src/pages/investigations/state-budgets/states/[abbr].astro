@@ -6,6 +6,7 @@ import EventLog from "../../../../components/investigations/state-budgets/EventL
 import BudgetTimeline from "../../../../components/investigations/state-budgets/BudgetTimeline.svelte";
 import FunctionBreakdown from "../../../../components/investigations/state-budgets/FunctionBreakdown.svelte";
 import DebtStory from "../../../../components/investigations/state-budgets/DebtStory.svelte";
+import WhatDebtBuilds from "../../../../components/investigations/state-budgets/WhatDebtBuilds.svelte";
 import ChartFrame from "../../../../components/charts/ChartFrame.astro";
 import { withBase } from "../../../../lib/withBase";
 import {
@@ -252,6 +253,14 @@ const dataTable = {
       />
     </ChartFrame>
 
+    <ChartFrame
+      title="What the building money built"
+      takeaway="Capital spending by what it was spent on. This is what borrowing is for — though as the figures below show, it is not mostly what paid for it."
+      source={{ label: "Census, author's classification of item codes", href: "https://www.census.gov/programs-surveys/state.html" }}
+    >
+      <WhatDebtBuilds client:visible years={years} capitalByFunction={state.capital_by_function} />
+    </ChartFrame>
+
     <section class="explainer">
       <h3>Where capital money comes from</h3>
       <p>
@@ -267,10 +276,20 @@ const dataTable = {
         for things like highways arrive as revenue and pay for capital directly.
         Bonds are spent over the years a project takes, not in the year they are
         issued. And a good deal of each year's issuance refinances older debt
-        rather than funding anything new. The two bars show the scale of the
-        sources against the scale of the building; they are not an accounting
-        identity, and across all fifty states the annual figures reconcile
-        closely only about a fifth of the time.
+        rather than funding anything new.
+      </p>
+      <p class="caveat">
+        Which is why the honest answer to "what is the debt buying" is narrower
+        than it looks. Borrowing is what states are <em>allowed</em> to use for
+        capital and not for operations, so the chart above is what the borrowing
+        is for. But across all fifty states from FY2012 to FY2024, capital
+        spending totalled $1.96 trillion while net new borrowing came to roughly
+        <em>nothing</em> — about &minus;3% of it. States built two trillion
+        dollars of roads and buildings and, taken together, paid down slightly
+        more debt than they took on. Year to year the two barely track each
+        other at all: the median correlation across states is +0.16. Most of the
+        building is paid for out of current revenue and federal grants, and the
+        debt is a smaller, lumpier part of the picture than its size suggests.
       </p>
     </section>
 

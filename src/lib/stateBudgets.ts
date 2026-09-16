@@ -37,6 +37,7 @@ export interface StateData {
   debt: Record<string, number[]>;
   debt_by_purpose: Record<string, number[]>;
   spending_split: { operating: number[]; capital: number[] };
+  capital_by_function: Record<string, number[]>;
   debt_service: number[];
   governors: GovernorTerm[];
   anomalies: Anomaly[];
