@@ -5,8 +5,7 @@ import BaseLayout from "../../../../layouts/BaseLayout.astro";
 import EventLog from "../../../../components/investigations/state-budgets/EventLog.astro";
 import BudgetTimeline from "../../../../components/investigations/state-budgets/BudgetTimeline.svelte";
 import FunctionBreakdown from "../../../../components/investigations/state-budgets/FunctionBreakdown.svelte";
-import DebtChart from "../../../../components/investigations/state-budgets/DebtChart.svelte";
-import CapitalAndDebt from "../../../../components/investigations/state-budgets/CapitalAndDebt.svelte";
+import DebtStory from "../../../../components/investigations/state-budgets/DebtStory.svelte";
 import ChartFrame from "../../../../components/charts/ChartFrame.astro";
 import { withBase } from "../../../../lib/withBase";
 import {
@@ -90,6 +89,21 @@ const tiles = [
     )}, as a share of the operating budget. Repaying the principal is not counted as spending.`,
   },
 ];
+
+const netBorrowing = years.map(
+  (_, i) => (state.debt.issued?.[i] ?? 0) - (state.debt.retired?.[i] ?? 0)
+);
+const surplus = years.map((_, i) => revenue[i] - operating[i]);
+
+const debtTable = {
+  headers: ["Fiscal year", "Capital spending", "Net new borrowing", "Total owed"],
+  rows: years.map((year, i) => [
+    `FY${year}`,
+    fmtBillions(capital[i]),
+    fmtBillions(netBorrowing[i]),
+    fmtBillions(debtOutstanding[i] ?? 0),
+  ]),
+};
 
 const topFunctions = Object.entries(state.expenditure_by_function)
   .map(([key, values]) => ({ key, value: values[last] ?? 0 }))
@@ -208,13 +222,7 @@ const dataTable = {
       </dl>
     </section>
 
-    <ChartFrame
-      title="What the borrowing pays for"
-      takeaway="Capital spending against net new borrowing — issuance minus repayment. When a state builds more than it can fund from the surplus, the gap is bonds."
-      source={{ label: "Census Annual Survey of State Government Finances", href: "https://www.census.gov/programs-surveys/state.html" }}
-    >
-      <CapitalAndDebt client:visible years={years} capital={capital} debt={state.debt} />
-    </ChartFrame>
+
 
     <EventLog anomalies={state.anomalies} disasters={state.disasters} />
 
@@ -227,12 +235,43 @@ const dataTable = {
     </ChartFrame>
 
     <ChartFrame
-      title="What the state owes"
-      takeaway="Long-term debt outstanding — the running total of borrowing not yet repaid."
+      title="The debt story"
+      takeaway={`Bars are the annual flows — what ${state.name} built, and how much it borrowed net of repayment. The line is the stock those flows accumulate into: what it still owes.`}
       source={{ label: "Census Annual Survey of State Government Finances", href: "https://www.census.gov/programs-surveys/state.html" }}
+      table={debtTable}
     >
-      <DebtChart client:visible years={years} debt={state.debt} population={population} />
+      <DebtStory
+        client:visible
+        years={years}
+        capital={capital}
+        operating={operating}
+        revenue={revenue}
+        debt={state.debt}
+        population={population}
+      />
     </ChartFrame>
+
+    <section class="explainer">
+      <h3>Where capital money comes from</h3>
+      <p>
+        Two sources fund the building: whatever is left over after the operating
+        budget balances, and borrowing. In {state.name}'s most recent year that
+        was an operating surplus of {fmtBillions(surplus[last])} and net new
+        borrowing of {fmtBillions(netBorrowing[last])}, against{" "}
+        {fmtBillions(capital[last])} of capital spending.
+      </p>
+      <p class="caveat">
+        Those don't add up, and they aren't meant to. A surplus doesn't have to
+        go to capital — it can go to reserves or pension funds. Federal grants
+        for things like highways arrive as revenue and pay for capital directly.
+        Bonds are spent over the years a project takes, not in the year they are
+        issued. And a good deal of each year's issuance refinances older debt
+        rather than funding anything new. The two bars show the scale of the
+        sources against the scale of the building; they are not an accounting
+        identity, and across all fifty states the annual figures reconcile
+        closely only about a fifth of the time.
+      </p>
+    </section>
 
     <nav class="pager">
       <a href={withBase(`/investigations/state-budgets/states/${previous.abbr.toLowerCase()}/`)}>
@@ -339,8 +378,19 @@ const dataTable = {
     margin: 2.5rem 0;
   }
 
+  .explainer h3 {
+    font-size: 1.15rem;
+    margin-bottom: 0.4rem;
+  }
+
   .explainer > p {
     color: var(--color-text-secondary);
+    max-width: 62ch;
+  }
+
+  .explainer .caveat {
+    color: var(--color-text-muted);
+    font-size: 0.88rem;
     max-width: 62ch;
   }
 
