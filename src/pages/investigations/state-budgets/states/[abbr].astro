@@ -6,6 +6,7 @@ import EventLog from "../../../../components/investigations/state-budgets/EventL
 import BudgetTimeline from "../../../../components/investigations/state-budgets/BudgetTimeline.svelte";
 import FunctionBreakdown from "../../../../components/investigations/state-budgets/FunctionBreakdown.svelte";
 import DebtChart from "../../../../components/investigations/state-budgets/DebtChart.svelte";
+import CapitalAndDebt from "../../../../components/investigations/state-budgets/CapitalAndDebt.svelte";
 import ChartFrame from "../../../../components/charts/ChartFrame.astro";
 import { withBase } from "../../../../lib/withBase";
 import {
@@ -53,20 +54,40 @@ const fmtDollars = (v: number) => `$${Math.round(v).toLocaleString()}`;
 const change = (series: number[]) =>
   series[last - 1] ? (series[last] - series[last - 1]) / series[last - 1] : 0;
 
+const operating = state.spending_split.operating;
+const capital = state.spending_split.capital;
+const debtService = state.debt_service;
+const federalAid = state.revenue_by_source.federal_aid ?? [];
+
 const tiles = [
-  { label: `Total spending, FY${years[last]}`, value: fmtBillions(spending[last]), delta: change(spending) },
+  { label: `Total spending, FY${years[last]}`, value: fmtBillions(spending[last]), delta: change(spending), note: "Everything the state spent, operating and capital." },
   {
     label: "Spending per resident",
     value: population[last] ? fmtDollars(spending[last] / population[last]) : "—",
     delta: change(spending.map((v, i) => (population[i] ? v / population[i] : 0))),
+    note: "Total spending divided by population.",
   },
-  { label: "Long-term debt outstanding", value: fmtBillions(debtOutstanding[last] ?? 0), delta: change(debtOutstanding) },
   {
-    label: "Federal share of revenue",
-    value: revenue[last]
-      ? `${Math.round(((state.revenue_by_source.federal_aid?.[last] ?? 0) / revenue[last]) * 100)}%`
-      : "—",
+    label: "Long-term debt outstanding",
+    value: fmtBillions(debtOutstanding[last] ?? 0),
+    delta: change(debtOutstanding),
+    note: "What the state still owes on money it has borrowed.",
+  },
+  {
+    label: "Money from Washington",
+    value: revenue[last] ? `${Math.round(((federalAid[last] ?? 0) / revenue[last]) * 100)}%` : "—",
     delta: null,
+    note: `Federal grants and aid as a share of all revenue — ${fmtBillions(
+      federalAid[last] ?? 0
+    )} of ${fmtBillions(revenue[last])}. Mostly Medicaid matching funds.`,
+  },
+  {
+    label: "Debt service",
+    value: operating[last] ? `${((debtService[last] / operating[last]) * 100).toFixed(1)}%` : "—",
+    delta: null,
+    note: `Interest paid on debt, ${fmtBillions(
+      debtService[last]
+    )}, as a share of the operating budget. Repaying the principal is not counted as spending.`,
   },
 ];
 
@@ -118,8 +139,9 @@ const dataTable = {
     <section class="tiles">
       {tiles.map((tile) => (
         <div class="tile">
-          <span class="tile-label">{tile.label}</span>
+          <span class="tile-label" title={tile.note}>{tile.label}</span>
           <span class="tile-value">{tile.value}</span>
+          <span class="tile-note">{tile.note}</span>
           {tile.delta !== null && (
             <span class={`tile-delta ${tile.delta >= 0 ? "up" : "down"}`}>
               {tile.delta >= 0 ? "▲" : "▼"} {Math.abs(tile.delta * 100).toFixed(1)}% vs FY{years[last - 1]}
@@ -130,23 +152,68 @@ const dataTable = {
     </section>
 
     <ChartFrame
-      title="Spending and revenue, with who was in office"
-      takeaway={`Shaded bands mark each governor's term. ${topFunctions
-        .map((f) => label(f.key))
-        .join(", ")} are the largest spending categories.`}
+      title="The operating budget has to balance"
+      takeaway={`Revenue and operating spending track each other closely — ${state.name}, like almost every state, cannot run an operating deficit. Shaded bands mark each governor's term.`}
       source={{ label: "Census Annual Survey of State Government Finances", href: "https://www.census.gov/programs-surveys/state.html" }}
       table={dataTable}
     >
       <BudgetTimeline
         client:visible
         years={years}
-        spending={spending}
+        spending={operating}
         revenue={revenue}
         governors={state.governors}
         anomalies={state.anomalies}
         fiscalStartMonth={state.fiscal_year_start_month}
         population={population}
       />
+    </ChartFrame>
+
+    <section class="explainer">
+      <h2>How the borrowing fits in</h2>
+      <p>
+        If the operating budget has to balance, where does the debt come from?
+        They are two separate streams, and Census keeps them apart.
+      </p>
+      <dl>
+        <div>
+          <dt>Operating — {fmtBillions(operating[last])}</dt>
+          <dd>
+            Salaries, Medicaid, aid to school districts, prisons, and the
+            interest on outstanding debt. This is the part that has to balance
+            against revenue, so a rise in one category is usually a cut
+            somewhere else — a reallocation, not new borrowing.
+          </dd>
+        </div>
+        <div>
+          <dt>Capital — {fmtBillions(capital[last])}</dt>
+          <dd>
+            Roads, buildings, land and equipment. States are allowed to borrow
+            for these, which is what the bonds are for and why capital spending
+            and new borrowing tend to move together.
+          </dd>
+        </div>
+        <div>
+          <dt>Debt service — {fmtBillions(debtService[last])}</dt>
+          <dd>
+            Interest <em>is</em> an operating cost and is counted in the figure
+            above, at {operating[last]
+              ? `${((debtService[last] / operating[last]) * 100).toFixed(1)}%`
+              : "—"}{" "}
+            of the operating budget. Repaying the principal is not counted as
+            spending at all — it retires a liability, which is why "debt
+            retired" never shows up in the spending charts.
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <ChartFrame
+      title="What the borrowing pays for"
+      takeaway="Capital spending against net new borrowing — issuance minus repayment. When a state builds more than it can fund from the surplus, the gap is bonds."
+      source={{ label: "Census Annual Survey of State Government Finances", href: "https://www.census.gov/programs-surveys/state.html" }}
+    >
+      <CapitalAndDebt client:visible years={years} capital={capital} debt={state.debt} />
     </ChartFrame>
 
     <EventLog anomalies={state.anomalies} disasters={state.disasters} />
@@ -160,11 +227,11 @@ const dataTable = {
     </ChartFrame>
 
     <ChartFrame
-      title="Debt: issued, retired, outstanding"
-      takeaway="What the state borrowed and paid down each year, against the total it owes."
+      title="What the state owes"
+      takeaway="Long-term debt outstanding — the running total of borrowing not yet repaid."
       source={{ label: "Census Annual Survey of State Government Finances", href: "https://www.census.gov/programs-surveys/state.html" }}
     >
-      <DebtChart client:visible years={years} debt={state.debt} />
+      <DebtChart client:visible years={years} debt={state.debt} population={population} />
     </ChartFrame>
 
     <nav class="pager">
@@ -206,6 +273,8 @@ const dataTable = {
   .crumbs {
     font-size: 0.85rem;
     margin-bottom: 1rem;
+    display: flex;
+    gap: 0.5rem;
   }
 
   header h1 {
@@ -246,6 +315,13 @@ const dataTable = {
     font-weight: 700;
   }
 
+  .tile-note {
+    font-size: 0.72rem;
+    line-height: 1.35;
+    color: var(--color-text-muted);
+    margin-top: 0.15rem;
+  }
+
   .tile-delta {
     font-size: 0.78rem;
     color: var(--color-text-muted);
@@ -257,6 +333,42 @@ const dataTable = {
 
   .tile-delta.down {
     color: var(--color-serious);
+  }
+
+  .explainer {
+    margin: 2.5rem 0;
+  }
+
+  .explainer > p {
+    color: var(--color-text-secondary);
+    max-width: 62ch;
+  }
+
+  .explainer dl {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+    margin: 1.25rem 0 0;
+  }
+
+  .explainer dl > div {
+    padding: 1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+  }
+
+  .explainer dt {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    color: var(--color-accent);
+    margin-bottom: 0.4rem;
+  }
+
+  .explainer dd {
+    margin: 0;
+    font-size: 0.88rem;
+    color: var(--color-text-secondary);
   }
 
   .pager {

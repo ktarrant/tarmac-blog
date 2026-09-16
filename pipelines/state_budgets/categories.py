@@ -100,6 +100,26 @@ FUNCTIONS = {
     "94": "transportation",     # transit
 }
 
+# Which side of the budget a kind of spending sits on. This is the distinction
+# that makes state borrowing make sense: nearly every state must balance its
+# operating budget, so operating spending tracks revenue year to year, while
+# capital projects are paid for with bonds and are what the debt is actually
+# for. Interest on that debt is an operating cost and is counted here as one;
+# repaying principal is not an expense at all in Census terms, it retires a
+# liability, which is why debt retired never appears in spending.
+BUDGET_SIDE = {
+    "current_operations": "operating",
+    "aid_to_local": "operating",
+    "aid_to_school_districts": "operating",
+    "aid_to_state_governments": "operating",
+    "aid_to_federal": "operating",
+    "subsidies": "operating",
+    "interest_on_debt": "operating",
+    "construction": "capital",
+    "capital_other": "capital",
+    "equipment": "capital",
+}
+
 # Census leaves function 27 out of its published total expenditure (SF0132).
 # Excluding it reproduces that total to the dollar for all 50 states; including
 # it overstates spending by roughly half a percent. The function has no entry

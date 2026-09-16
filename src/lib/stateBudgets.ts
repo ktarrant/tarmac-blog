@@ -35,6 +35,8 @@ export interface StateData {
   expenditure_by_component: Record<string, number[]>;
   revenue_by_source: Record<string, number[]>;
   debt: Record<string, number[]>;
+  spending_split: { operating: number[]; capital: number[] };
+  debt_service: number[];
   governors: GovernorTerm[];
   anomalies: Anomaly[];
   disasters: Record<string, Disaster[]>;
@@ -73,9 +75,28 @@ export function label(key: string): string {
 /** The metric key inside an anomaly, e.g. "expenditure.k12" -> "K-12 education". */
 export function anomalyLabel(metric: string): string {
   const [flow, key] = metric.split(".");
+  if (flow === "spending") {
+    return key === "capital" ? "Capital spending" : "Operating spending";
+  }
   const flowLabel = { expenditure: "Spending", revenue: "Revenue", debt: "Debt" }[flow] ?? flow;
   return `${flowLabel} · ${label(key)}`;
 }
+
+/** Which side of the budget a movement sits on — what a reader needs in order
+ *  to tell a reallocation from something that gets paid for by borrowing. */
+export function budgetSide(metric: string): "operating" | "capital" | "borrowing" | "revenue" {
+  if (metric === "spending.capital") return "capital";
+  if (metric.startsWith("debt.")) return "borrowing";
+  if (metric.startsWith("revenue.")) return "revenue";
+  return "operating";
+}
+
+export const SIDE_NOTE: Record<string, string> = {
+  operating: "Operating budget — has to balance, so this is money moved rather than money borrowed",
+  capital: "Capital — building things, which is what borrowing pays for",
+  borrowing: "Borrowing — changes what the state owes, not what it spends running",
+  revenue: "Revenue — money coming in",
+};
 
 export const PARTY_NAMES: Record<string, string> = {
   D: "Democrat",

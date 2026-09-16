@@ -361,11 +361,26 @@ def build_states(
         pop_lookup = dict(zip(pop["year"].to_list(), pop["population"].to_list()))
 
         by_function = by("function", "expenditure")
+        by_component = by("component", "expenditure")
         revenue_by_source = by("component", "revenue")
+
+        # Operating and capital move for different reasons and are funded
+        # differently, so the page needs them apart rather than as one total.
+        spending_split = {"operating": [0] * len(years), "capital": [0] * len(years)}
+        for component, series in by_component.items():
+            side = categories.BUDGET_SIDE.get(component)
+            if side is None:
+                continue
+            for index, value in enumerate(series):
+                spending_split[side][index] += value
 
         # Anomalies are looked for in the functional breakdown plus the headline
         # series, since a debt issuance spike is one of the most telling signals.
         watched = {
+            # Operating and capital as their own series, so a reader can tell a
+            # reallocation inside the operating budget from the kind of spending
+            # that borrowing pays for.
+            **{f"spending.{k}": v for k, v in spending_split.items()},
             **{f"expenditure.{k}": v for k, v in by_function.items()},
             **{f"revenue.{k}": v for k, v in revenue_by_source.items()},
             # Only new borrowing: debt retired and opening balances move for
@@ -383,7 +398,9 @@ def build_states(
             "fiscal_year_start_month": anomalies.fiscal_year_starts().get(abbr, 7),
             "population": [pop_lookup.get(year, 0) for year in years],
             "expenditure_by_function": by_function,
-            "expenditure_by_component": by("component", "expenditure"),
+            "expenditure_by_component": by_component,
+            "spending_split": spending_split,
+            "debt_service": by_component.get("interest_on_debt", [0] * len(years)),
             "revenue_by_source": revenue_by_source,
             "debt": debt_out,
             "governors": [

@@ -1,5 +1,5 @@
 ---
-import { anomalyLabel, type Anomaly, type Disaster } from "../../../lib/stateBudgets";
+import { anomalyLabel, budgetSide, SIDE_NOTE, type Anomaly, type Disaster } from "../../../lib/stateBudgets";
 import { formatDateShort } from "../../../lib/format";
 
 interface Props {
@@ -80,6 +80,9 @@ function eventsFor(anomaly: Anomaly): Disaster[] {
             {money(anomaly.previous)} → {money(anomaly.amount)} ·{" "}
             {(anomaly.impact * 100).toFixed(1)}% of the budget ·{" "}
             <span class="kind">{KIND_LABEL[anomaly.kind]}</span>
+          </div>
+          <div class={`side side-${budgetSide(anomaly.metric)}`}>
+            {SIDE_NOTE[budgetSide(anomaly.metric)]}
           </div>
           {events.length > 0 && (
             <ul class="disasters">
@@ -189,6 +192,22 @@ function eventsFor(anomaly: Anomaly): Disaster[] {
 
   .kind {
     color: var(--color-text-secondary);
+  }
+
+  .side {
+    margin-top: 0.4rem;
+    font-size: 0.76rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    display: inline-block;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+  }
+
+  .side-capital,
+  .side-borrowing {
+    border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+    color: var(--color-accent);
   }
 
   .disasters {

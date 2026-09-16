@@ -18,6 +18,7 @@
     fiscalStartMonth = 7,
     perCapita = false,
     population = [],
+    spendingLabel = "Operating spending",
   }: {
     years: number[];
     spending: number[];
@@ -27,6 +28,7 @@
     fiscalStartMonth?: number;
     perCapita?: boolean;
     population?: number[];
+    spendingLabel?: string;
   } = $props();
 
   const scale = (values: number[]) =>
@@ -37,17 +39,20 @@
       ? `$${Math.round(value).toLocaleString()} per person`
       : `$${(value / 1e9).toFixed(1)}B`;
 
-  // One band per governor, clipped to the years on the chart. Bands are drawn
-  // behind the lines so the party context reads without competing with the data.
+  // One band per governor, held as axis indices rather than year labels. A
+  // band runs from half a step before its first fiscal year to half a step
+  // after its last, so consecutive terms meet exactly at the midpoint between
+  // two ticks instead of leaving an unshaded gap — which is also the honest
+  // place for the boundary, since governors take office mid-fiscal-year.
   const bands = $derived.by(() => {
     const seen: { term: GovernorTerm; from: number; to: number }[] = [];
-    for (const year of years) {
+    years.forEach((year, index) => {
       const term = governorForYear(governors, year, fiscalStartMonth);
-      if (!term) continue;
+      if (!term) return;
       const last = seen.at(-1);
-      if (last && last.term.name === term.name) last.to = year;
-      else seen.push({ term, from: year, to: year });
-    }
+      if (last && last.term.name === term.name) last.to = index;
+      else seen.push({ term, from: index, to: index });
+    });
     return seen;
   });
 
@@ -66,7 +71,7 @@
 
   const option = $derived({
     grid: { left: 64, right: 20, top: 44, bottom: 30 },
-    legend: { top: 8, data: ["Spending", "Revenue"] },
+    legend: { top: 8, data: [spendingLabel, "Revenue"] },
     tooltip: {
       trigger: "axis",
       formatter: (params: any[]) => {
@@ -100,7 +105,7 @@
     },
     series: [
       {
-        name: "Spending",
+        name: spendingLabel,
         type: "line",
         data: scale(spending),
         lineStyle: { width: 2 },
@@ -112,7 +117,7 @@
           silent: true,
           data: bands.map((band, index) => [
             {
-              xAxis: String(band.from),
+              xAxis: band.from - 0.5,
               // Alternating weight keeps consecutive same-party governors
               // visually separable; colour alone can't, since both are red.
               itemStyle: {
@@ -124,7 +129,7 @@
               },
               name: band.term.name,
               label: {
-                show: band.to - band.from >= 2,
+                show: band.to - band.from >= 1,
                 position: "insideTopLeft",
                 color: chrome.inkSecondary,
                 fontSize: 11,
@@ -132,7 +137,7 @@
                 formatter: () => band.term.name,
               },
             },
-            { xAxis: String(band.to) },
+            { xAxis: band.to + 0.5 },
           ]),
         },
         markLine: {
@@ -158,3 +163,49 @@
 </script>
 
 <EChart {option} height="380px" />
+
+<ul class="governors">
+  {#each bands as band}
+    <li>
+      <span class="swatch" style={`background:${bandColor(band.term.party)}`}></span>
+      <span class="who">{band.term.name}</span>
+      <span class="when">
+        FY{years[band.from]}{band.from === band.to ? "" : `–FY${years[band.to]}`}
+        · {PARTY_NAMES[band.term.party ?? ""] ?? "—"}
+      </span>
+    </li>
+  {/each}
+</ul>
+
+<style>
+  .governors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1.25rem;
+    list-style: none;
+    margin: 0.75rem 0 0;
+    padding: 0;
+    font-size: 0.8rem;
+  }
+
+  .governors li {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex: none;
+  }
+
+  .who {
+    color: var(--color-text);
+  }
+
+  .when {
+    color: var(--color-text-muted);
+  }
+</style>
