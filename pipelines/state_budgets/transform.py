@@ -322,11 +322,18 @@ def build_national(finances: pl.DataFrame, population: pl.DataFrame, deflator: p
     return write_json(OUT_DIR / "national.json", payload)
 
 
+def load_state_gdp() -> dict[str, dict[int, float]]:
+    """Nominal gross state product, keyed by state and calendar year."""
+    raw = json.loads(fetch.state_gdp().read_text())
+    return {abbr: {int(y): v for y, v in series.items()} for abbr, series in raw.items()}
+
+
 def build_states(
     finances: pl.DataFrame,
     population: pl.DataFrame,
     governors: pl.DataFrame,
     disasters: dict[str, dict[int, list[dict]]],
+    gdp: dict[str, dict[int, float]] | None = None,
 ) -> list[Path]:
     """states/{abbr}.json: everything one state page needs, in one fetch."""
     years = list(YEARS)
@@ -373,6 +380,19 @@ def build_states(
             rows_ = by_purpose.filter(pl.col("purpose") == kind)
             lookup_ = dict(zip(rows_["year"].to_list(), rows_["amount"].to_list()))
             debt_by_purpose[kind] = [lookup_.get(year, 0) for year in years]
+
+        holdings_grouped = (
+            state.filter(pl.col("flow") == "holdings")
+            .group_by(["component", "year"])
+            .agg(pl.col("amount").sum())
+        )
+        holdings = {}
+        for component in sorted(holdings_grouped["component"].unique().to_list()):
+            rows_ = holdings_grouped.filter(pl.col("component") == component)
+            lookup_ = dict(zip(rows_["year"].to_list(), rows_["amount"].to_list()))
+            holdings[component] = [lookup_.get(year, 0) for year in years]
+
+        state_gdp = (gdp or {}).get(abbr, {})
 
         pop = population.filter(pl.col("abbr") == abbr)
         pop_lookup = dict(zip(pop["year"].to_list(), pop["population"].to_list()))
@@ -442,6 +462,8 @@ def build_states(
             "revenue_by_source": revenue_by_source,
             "debt": debt_out,
             "debt_by_purpose": debt_by_purpose,
+            "holdings": holdings,
+            "gdp": [int(state_gdp.get(year, 0)) for year in years],
             "governors": [
                 {k: v for k, v in term.items() if k != "abbr"}
                 for term in governors.filter(pl.col("abbr") == abbr).to_dicts()
@@ -533,7 +555,7 @@ def build() -> list[Path]:
     governors = load_governors()
     return [
         build_national(finances, population, load_deflator()),
-        *build_states(finances, population, governors, load_disasters()),
+        *build_states(finances, population, governors, load_disasters(), load_state_gdp()),
         build_politics(),
         build_geo(),
         build_sources(),

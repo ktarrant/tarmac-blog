@@ -97,13 +97,17 @@ const netBorrowing = years.map(
 const surplus = years.map((_, i) => revenue[i] - operating[i]);
 
 const debtTable = {
-  headers: ["Fiscal year", "Capital spending", "Net new borrowing", "Total owed"],
-  rows: years.map((year, i) => [
-    `FY${year}`,
-    fmtBillions(capital[i]),
-    fmtBillions(netBorrowing[i]),
-    fmtBillions(debtOutstanding[i] ?? 0),
-  ]),
+  headers: ["Fiscal year", "Total owed", "% of state GDP", "Cash & securities held"],
+  rows: years.map((year, i) => {
+    const owed = debtOutstanding[i] ?? 0;
+    const held = Object.values(state.holdings).reduce((sum, v) => sum + (v[i] ?? 0), 0);
+    return [
+      `FY${year}`,
+      fmtBillions(owed),
+      state.gdp[i] ? `${((owed / state.gdp[i]) * 100).toFixed(1)}%` : "—",
+      held ? fmtBillions(held) : "not published",
+    ];
+  }),
 };
 
 const topFunctions = Object.entries(state.expenditure_by_function)
@@ -237,18 +241,21 @@ const dataTable = {
 
     <ChartFrame
       title="The debt story"
-      takeaway={`Bars are the annual flows — what ${state.name} built, and how much it borrowed net of repayment. The shaded area behind them is the stock those flows accumulate into: what it still owes, and how much of that is really its own.`}
+      takeaway={`${state.name} owes ${fmtBillions(debtOutstanding[last] ?? 0)} — ${
+                state.gdp[last]
+                  ? `${(((debtOutstanding[last] ?? 0) / state.gdp[last]) * 100).toFixed(1)}% of the state's economy, against ${((debtOutstanding[0] / state.gdp[0]) * 100).toFixed(1)}% in FY${years[0]}`
+                  : "measured against the size of its economy"
+              }.`}
       source={{ label: "Census Annual Survey of State Government Finances", href: "https://www.census.gov/programs-surveys/state.html" }}
       table={debtTable}
     >
       <DebtStory
         client:visible
         years={years}
-        capital={capital}
-        operating={operating}
-        revenue={revenue}
         debt={state.debt}
         byPurpose={state.debt_by_purpose}
+        holdings={state.holdings}
+        gdp={state.gdp}
         population={population}
       />
     </ChartFrame>

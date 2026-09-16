@@ -4,121 +4,109 @@
 
   let {
     years,
-    capital,
-    operating,
-    revenue,
     debt,
     byPurpose = {},
+    holdings = {},
+    gdp = [],
     population = [],
   }: {
     years: number[];
-    capital: number[];
-    operating: number[];
-    revenue: number[];
     debt: Record<string, number[]>;
     byPurpose?: Record<string, number[]>;
+    holdings?: Record<string, number[]>;
+    gdp?: number[];
     population?: number[];
   } = $props();
 
-  const issued = $derived(debt.issued ?? []);
-  const retired = $derived(debt.retired ?? []);
   const outstanding = $derived(debt.outstanding_end ?? []);
-
-  // Borrowing issued minus borrowing repaid. This is the flow that moves the
-  // stock of debt; issuance alone overstates it, because a large share of most
-  // years' issuance refinances bonds being retired the same year.
-  const net = $derived(years.map((_, i) => (issued[i] ?? 0) - (retired[i] ?? 0)));
-  const surplus = $derived(years.map((_, i) => (revenue[i] ?? 0) - (operating[i] ?? 0)));
-
-  // Two tracks, stacked to the published total. Conduit debt is borrowing the
-  // state issues for private borrowers who repay it, so it inflates the total
-  // without being a burden on taxpayers — which is why it was dropped in FY2022.
-  const conduit = $derived(byPurpose.private_purpose ?? years.map(() => 0));
-  const ownDebt = $derived(
+  const conduitDollars = $derived(byPurpose.private_purpose ?? years.map(() => 0));
+  const ownDollars = $derived(
     byPurpose.public_purpose ?? years.map((_, i) => outstanding[i] ?? 0)
   );
+  const holdingsDollars = $derived(
+    years.map((_, i) => Object.values(holdings).reduce((sum, v) => sum + (v[i] ?? 0), 0))
+  );
 
-  const billions = (value: number) => `$${(value / 1e9).toFixed(2)}B`;
+  // A dollar figure says nothing about whether a state owes a lot: $26B is
+  // crushing for Vermont and trivial for California. Against the size of the
+  // state's economy it becomes both interpretable and comparable.
+  const share = (values: number[]) =>
+    years.map((_, i) => (gdp[i] ? (values[i] ?? 0) / gdp[i] : null));
+
+  const own = $derived(share(ownDollars));
+  const conduit = $derived(share(conduitDollars));
+  // Census stopped publishing holdings after FY2021, so the line ends rather
+  // than dropping to zero, which would read as a state spending its reserves.
+  const held = $derived(
+    years.map((_, i) => (holdingsDollars[i] > 0 && gdp[i] ? holdingsDollars[i] / gdp[i] : null))
+  );
+
+  const pct = (value: number | null) => (value === null ? "—" : `${(value * 100).toFixed(1)}%`);
+  const billions = (value: number) => `$${(value / 1e9).toFixed(1)}B`;
 
   const option = $derived({
-    grid: { left: 70, right: 20, top: 48, bottom: 30 },
-    legend: { top: 8 },
+    grid: { left: 58, right: 20, top: 48, bottom: 30 },
+    legend: { top: 8, textStyle: { fontSize: 11 } },
     tooltip: {
       trigger: "axis",
       formatter: (params: any[]) => {
         const i = params[0].dataIndex;
         const perPerson = population[i]
-          ? `<br/><span style="color:${chrome.inkMuted}">$${Math.round(
-              (outstanding[i] ?? 0) / population[i]
-            ).toLocaleString()} per resident</span>`
+          ? ` · $${Math.round((outstanding[i] ?? 0) / population[i]).toLocaleString()} per resident`
           : "";
-        // The split stops after FY2021, when Census dropped conduit debt.
-        const split = conduit[i]
+        const conduitLine = conduitDollars[i]
           ? `<br/><span style="color:${chrome.inkMuted}">of which ${billions(
-              conduit[i]
-            )} was conduit debt issued for private borrowers</span>`
+              conduitDollars[i]
+            )} conduit debt for private borrowers</span>`
           : "";
+        const heldLine = holdingsDollars[i]
+          ? `<br/>Cash and securities held: <strong>${billions(holdingsDollars[i])}</strong> (${pct(
+              held[i]
+            )})`
+          : `<br/><span style="color:${chrome.inkMuted}">Holdings no longer published</span>`;
         return `<strong>FY${years[i]}</strong><br/>
-          Owed at year end: <strong>${billions(outstanding[i] ?? 0)}</strong>${perPerson}${split}<br/>
-          Net new borrowing: <strong>${billions(net[i])}</strong><br/>
-          Capital spending: <strong>${billions(capital[i] ?? 0)}</strong><br/>
-          <span style="color:${chrome.inkMuted}">Operating surplus that year: ${billions(
-            surplus[i]
-          )}</span>`;
+          Owed: <strong>${billions(outstanding[i] ?? 0)}</strong> (${pct(
+            gdp[i] ? (outstanding[i] ?? 0) / gdp[i] : null
+          )} of GDP)${perPerson}${conduitLine}${heldLine}<br/>
+          <span style="color:${chrome.inkMuted}">State economy: ${billions(gdp[i] ?? 0)}</span>`;
       },
     },
-    xAxis: { type: "category", data: years.map(String) },
+    xAxis: { type: "category", data: years.map(String), boundaryGap: false },
     yAxis: {
       type: "value",
-      axisLabel: { formatter: (value: number) => `$${(value / 1e9).toFixed(0)}B` },
+      axisLabel: { formatter: (value: number) => `${(value * 100).toFixed(0)}%` },
     },
     series: [
       {
         name: "The state's own debt",
         type: "line",
         stack: "owed",
-        data: ownDebt,
+        data: own,
         lineStyle: { width: 0 },
-        // itemStyle drives the legend swatch; without it the legend shows a
-        // default palette colour that doesn't match the fill.
         itemStyle: { color: categorical[6] },
-        areaStyle: { color: categorical[6], opacity: 0.32 },
+        areaStyle: { color: categorical[6], opacity: 0.4 },
         symbol: "none",
-        z: 2,
       },
       {
-        name: "Conduit debt (issued for private borrowers)",
+        name: "Conduit debt (for private borrowers)",
         type: "line",
         stack: "owed",
         data: conduit,
         lineStyle: { width: 0 },
         itemStyle: { color: chrome.inkMuted },
-        areaStyle: { color: chrome.inkMuted, opacity: 0.22 },
+        areaStyle: { color: chrome.inkMuted, opacity: 0.25 },
         symbol: "none",
-        z: 2,
       },
       {
-        name: "Capital spending",
-        type: "bar",
-        data: capital,
-        barMaxWidth: 16,
-        itemStyle: { color: categorical[0], borderRadius: [4, 4, 0, 0] },
+        name: "Cash and securities held",
+        type: "line",
+        data: held,
+        lineStyle: { width: 2, type: "dashed" },
+        itemStyle: { color: categorical[3] },
+        symbol: "circle",
+        symbolSize: 7,
+        connectNulls: false,
         z: 4,
-      },
-      {
-        name: "Net new borrowing",
-        type: "bar",
-        data: net,
-        barMaxWidth: 16,
-        itemStyle: { color: categorical[3], borderRadius: [4, 4, 0, 0] },
-        z: 4,
-        markLine: {
-          silent: true,
-          symbol: "none",
-          lineStyle: { color: chrome.baseline, width: 1 },
-          label: { show: false },
-          data: [{ yAxis: 0 }],
-        },
       },
     ],
   });
@@ -126,22 +114,22 @@
 
 <EChart {option} height="380px" />
 
-{#if conduit.some((v) => v > 0)}
-  <p class="note">
-    The grey band is conduit debt — bonds a state issues on behalf of private
-    borrowers such as industrial developers, hospitals and colleges, who repay
-    them. It counts against the state on paper without being a burden on its
-    taxpayers. Accounting standards changed in FY2022 and Census stopped
-    reporting it, which is why the total drops that year: nothing was repaid,
-    it stopped being counted.
-  </p>
-{/if}
+<p class="note">
+  Measured against the size of the state's economy, so it can be compared with
+  other states and with itself over time.
+  {#if holdingsDollars.some((v) => v > 0)}
+    The dashed line is cash and securities the state holds outside its pension
+    funds — sinking funds set aside for debt service, unspent bond proceeds and
+    general balances. Census stopped publishing it after FY2021, so the line
+    ends there rather than falling to zero.
+  {/if}
+</p>
 
 <style>
   .note {
     margin: 0.5rem 0 0;
     font-size: 0.8rem;
     color: var(--color-text-muted);
-    max-width: 68ch;
+    max-width: 70ch;
   }
 </style>

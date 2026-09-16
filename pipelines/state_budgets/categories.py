@@ -156,6 +156,18 @@ DEBT_CODES = {
     "64V": ("short_term_debt", "outstanding_end", "short_term"),
 }
 
+# Cash and securities a state holds outside its pension funds: W01 is money set
+# aside to service debt (sinking funds), W31 unspent bond proceeds, W61
+# everything else. Together they are the closest thing Census reports to a state
+# treasury, and they matter to the debt picture — a state owing $30B while
+# holding $25B is in a different position than the debt figure alone suggests.
+# Census stopped publishing all three from FY2022.
+HOLDINGS_CODES = {
+    "W01": "debt_offsets",
+    "W31": "bond_funds",
+    "W61": "other_funds",
+}
+
 # The insurance-trust system (unemployment, workers' comp, pensions) is a
 # separate flow from the general budget and is reported apart from it, so that
 # pension contributions don't read as "spending" in the functional breakdown.
@@ -181,6 +193,14 @@ def classify(item_code: str) -> dict[str, str] | None:
             "function": kind,
             "component": component,
             "purpose": purpose,
+        }
+
+    if item_code in HOLDINGS_CODES:
+        return {
+            "flow": "holdings",
+            "function": "cash_and_securities",
+            "component": HOLDINGS_CODES[item_code],
+            "purpose": None,
         }
 
     prefix, digits = item_code[0], item_code[1:]

@@ -7,6 +7,8 @@ here parses: see transform.py.
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import os
 import re
@@ -17,6 +19,7 @@ from pathlib import Path
 import httpx
 
 from .paths import RAW_DIR
+from .states import ABBRS_50
 
 USER_AGENT = "tarmac-blog-pipeline/0.1 (https://github.com/ktarrant/tarmac-blog)"
 KEYCHAIN_SERVICE = "tarmac-census-api-key"
@@ -33,6 +36,7 @@ POPULATION_FILES = {
     "https://www2.census.gov/programs-surveys/popest/datasets/2000-2010/intercensal/state/st-est00int-alldata.csv": range(2000, 2010),
 }
 DEFLATOR_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=A191RD3A086NBEA"
+FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv"
 WIKIDATA_SPARQL = "https://query.wikidata.org/sparql"
 FEMA_DECLARATIONS = "https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries"
 FEMA_SUMMARIES = "https://www.fema.gov/api/open/v1/FemaWebDisasterSummaries"
@@ -165,6 +169,36 @@ def gdp_deflator() -> Path:
     return _download(DEFLATOR_URL, RAW_DIR / "deflator" / "gdp-deflator.csv")
 
 
+def state_gdp() -> Path:
+    """Nominal gross state product per state, from FRED's BEA series.
+
+    One series per state ({ABBR}NGSP), fetched once and cached together. Used
+    to express debt as a share of the state's economy, which is the only way a
+    dollar figure means anything across states of very different sizes.
+    """
+    dest = RAW_DIR / "gdp" / "state-gdp.json"
+    if dest.exists():
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    collected: dict[str, dict[int, float]] = {}
+    with httpx.Client(timeout=90, headers={"User-Agent": USER_AGENT}, follow_redirects=True) as client:
+        for abbr in ABBRS_50:
+            response = client.get(FRED_CSV, params={"id": f"{abbr}NGSP"})
+            response.raise_for_status()
+            reader = csv.DictReader(io.StringIO(response.text))
+            series = {}
+            for row in reader:
+                value = row.get(f"{abbr}NGSP", "")
+                if value not in (".", "", None):
+                    # FRED reports gross state product in millions.
+                    series[int(row["observation_date"][:4])] = float(value) * 1_000_000
+            collected[abbr] = series
+
+    dest.write_text(json.dumps(collected))
+    return dest
+
+
 def governors() -> Path:
     """Governor terms with party and dates, from Wikidata."""
     dest = RAW_DIR / "politics" / "governors.json"
@@ -245,6 +279,7 @@ def fetch_all(years: range) -> None:
         state_finances(year)
     population()
     gdp_deflator()
+    state_gdp()
     governors()
 
 
