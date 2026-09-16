@@ -4,46 +4,21 @@
 
   let {
     years,
-    debt,
-    byPurpose = {},
-    holdings = {},
-    gdp = [],
-    population = [],
+    name,
+    burden,
+    median,
   }: {
     years: number[];
-    debt: Record<string, number[]>;
-    byPurpose?: Record<string, number[]>;
-    holdings?: Record<string, number[]>;
-    gdp?: number[];
-    population?: number[];
+    name: string;
+    burden: { interest_share: number[]; debt_share: number[] };
+    median: { interest_share: number[]; debt_share: number[] };
   } = $props();
 
-  const outstanding = $derived(debt.outstanding_end ?? []);
-  const conduitDollars = $derived(byPurpose.private_purpose ?? years.map(() => 0));
-  const ownDollars = $derived(
-    byPurpose.public_purpose ?? years.map((_, i) => outstanding[i] ?? 0)
-  );
-  const holdingsDollars = $derived(
-    years.map((_, i) => Object.values(holdings).reduce((sum, v) => sum + (v[i] ?? 0), 0))
-  );
-
-  // A dollar figure says nothing about whether a state owes a lot: $26B is
-  // crushing for Vermont and trivial for California. Against the size of the
-  // state's economy it becomes both interpretable and comparable.
-  const share = (values: number[]) =>
-    years.map((_, i) => (gdp[i] ? (values[i] ?? 0) / gdp[i] : null));
-
-  const own = $derived(share(ownDollars));
-  const conduit = $derived(share(conduitDollars));
-  // Census stopped publishing holdings after FY2021, so the line ends rather
-  // than dropping to zero, which would read as a state spending its reserves.
-  const held = $derived(
-    years.map((_, i) => (holdingsDollars[i] > 0 && gdp[i] ? holdingsDollars[i] / gdp[i] : null))
-  );
-
-  const pct = (value: number | null) => (value === null ? "—" : `${(value * 100).toFixed(1)}%`);
-  const billions = (value: number) => `$${(value / 1e9).toFixed(1)}B`;
-
+  // Interest is the burden. Debt outstanding is a stock that costs nothing by
+  // itself; what a budget actually feels is the interest coming due each year.
+  // Principal repaid is deliberately excluded — much of it is refinancing, and
+  // counting it puts states that rolled over debt at 37% of revenue, which
+  // describes their treasury operations rather than any strain on them.
   const option = $derived({
     grid: { left: 58, right: 20, top: 48, bottom: 30 },
     legend: { top: 8, textStyle: { fontSize: 11 } },
@@ -51,78 +26,56 @@
       trigger: "axis",
       formatter: (params: any[]) => {
         const i = params[0].dataIndex;
-        const perPerson = population[i]
-          ? ` · $${Math.round((outstanding[i] ?? 0) / population[i]).toLocaleString()} per resident`
-          : "";
-        const conduitLine = conduitDollars[i]
-          ? `<br/><span style="color:${chrome.inkMuted}">of which ${billions(
-              conduitDollars[i]
-            )} conduit debt for private borrowers</span>`
-          : "";
-        const heldLine = holdingsDollars[i]
-          ? `<br/>Cash and securities held: <strong>${billions(holdingsDollars[i])}</strong> (${pct(
-              held[i]
-            )})`
-          : `<br/><span style="color:${chrome.inkMuted}">Holdings no longer published</span>`;
+        const months = burden.debt_share[i] * 12;
+        const medianMonths = median.debt_share[i] * 12;
         return `<strong>FY${years[i]}</strong><br/>
-          Owed: <strong>${billions(outstanding[i] ?? 0)}</strong> (${pct(
-            gdp[i] ? (outstanding[i] ?? 0) / gdp[i] : null
-          )} of GDP)${perPerson}${conduitLine}${heldLine}<br/>
-          <span style="color:${chrome.inkMuted}">State economy: ${billions(gdp[i] ?? 0)}</span>`;
+          ${name}: <strong>${(burden.interest_share[i] * 100).toFixed(2)}%</strong> of revenue goes to interest<br/>
+          <span style="color:${chrome.inkMuted}">Median state: ${(
+            median.interest_share[i] * 100
+          ).toFixed(2)}%</span><br/>
+          <br/>Debt outstanding equals <strong>${months.toFixed(1)} months</strong> of revenue<br/>
+          <span style="color:${chrome.inkMuted}">Median state: ${medianMonths.toFixed(
+            1
+          )} months</span>`;
       },
     },
     xAxis: { type: "category", data: years.map(String), boundaryGap: false },
     yAxis: {
       type: "value",
-      axisLabel: { formatter: (value: number) => `${(value * 100).toFixed(0)}%` },
+      axisLabel: { formatter: (value: number) => `${(value * 100).toFixed(1)}%` },
     },
     series: [
       {
-        name: "The state's own debt",
+        name,
         type: "line",
-        stack: "owed",
-        data: own,
-        lineStyle: { width: 0 },
-        itemStyle: { color: categorical[6] },
-        areaStyle: { color: categorical[6], opacity: 0.4 },
-        symbol: "none",
-      },
-      {
-        name: "Conduit debt (for private borrowers)",
-        type: "line",
-        stack: "owed",
-        data: conduit,
-        lineStyle: { width: 0 },
-        itemStyle: { color: chrome.inkMuted },
-        areaStyle: { color: chrome.inkMuted, opacity: 0.25 },
-        symbol: "none",
-      },
-      {
-        name: "Cash and securities held",
-        type: "line",
-        data: held,
-        lineStyle: { width: 2, type: "dashed" },
-        itemStyle: { color: categorical[3] },
+        data: burden.interest_share,
+        lineStyle: { width: 2 },
+        itemStyle: { color: categorical[1] },
+        areaStyle: { color: categorical[1], opacity: 0.16 },
         symbol: "circle",
-        symbolSize: 7,
-        connectNulls: false,
-        z: 4,
+        symbolSize: 8,
+        z: 3,
+      },
+      {
+        name: "Median state",
+        type: "line",
+        data: median.interest_share,
+        lineStyle: { width: 2, type: "dashed" },
+        itemStyle: { color: chrome.inkMuted },
+        symbol: "none",
+        z: 2,
       },
     ],
   });
 </script>
 
-<EChart {option} height="380px" />
+<EChart {option} height="360px" />
 
 <p class="note">
-  Measured against the size of the state's economy, so it can be compared with
-  other states and with itself over time.
-  {#if holdingsDollars.some((v) => v > 0)}
-    The dashed line is cash and securities the state holds outside its pension
-    funds — sinking funds set aside for debt service, unspent bond proceeds and
-    general balances. Census stopped publishing it after FY2021, so the line
-    ends there rather than falling to zero.
-  {/if}
+  Interest only. Principal repaid is left out because much of it refinances
+  existing bonds rather than retiring them, which would put states that simply
+  rolled debt over at a third of their revenue and describe their treasury
+  operations rather than any strain on them.
 </p>
 
 <style>

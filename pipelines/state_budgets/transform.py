@@ -328,12 +328,78 @@ def load_state_gdp() -> dict[str, dict[int, float]]:
     return {abbr: {int(y): v for y, v in series.items()} for abbr, series in raw.items()}
 
 
+def debt_burden(finances: pl.DataFrame) -> tuple[dict[str, dict[str, list[float]]], dict[str, list[float]]]:
+    """Debt measured against revenue — the money a state actually controls.
+
+    GDP is the size of the economy, but a state only taxes a slice of it, and
+    that slice varies three-fold across states. Revenue is what is actually
+    available to service debt, so it is the denominator that makes "is this a
+    burden" answerable. Interest is the annual cost; principal repaid is not
+    used, because much of it is refinancing rather than a call on the budget.
+
+    Returns per-state series plus the 50-state median for each year.
+    """
+    years = list(YEARS)
+    revenue = (
+        finances.filter(pl.col("flow") == "revenue")
+        .group_by(["abbr", "year"])
+        .agg(pl.col("amount").sum().alias("revenue"))
+    )
+    interest = (
+        finances.filter(
+            (pl.col("flow") == "expenditure") & (pl.col("component") == "interest_on_debt")
+        )
+        .group_by(["abbr", "year"])
+        .agg(pl.col("amount").sum().alias("interest"))
+    )
+    stock = (
+        finances.filter(
+            (pl.col("flow") == "debt") & (pl.col("component") == "outstanding_end")
+        )
+        .group_by(["abbr", "year"])
+        .agg(pl.col("amount").sum().alias("debt"))
+    )
+    joined = revenue.join(interest, on=["abbr", "year"], how="left").join(
+        stock, on=["abbr", "year"], how="left"
+    )
+
+    per_state: dict[str, dict[str, list[float]]] = {}
+    for abbr in ABBRS_50:
+        rows = joined.filter(pl.col("abbr") == abbr)
+        lookup = {r["year"]: r for r in rows.to_dicts()}
+        interest_share, debt_share = [], []
+        for year in years:
+            row = lookup.get(year)
+            rev = (row or {}).get("revenue") or 0
+            interest_share.append(round(((row or {}).get("interest") or 0) / rev, 5) if rev else 0.0)
+            debt_share.append(round(((row or {}).get("debt") or 0) / rev, 4) if rev else 0.0)
+        per_state[abbr] = {"interest_share": interest_share, "debt_share": debt_share}
+
+    median = {"interest_share": [], "debt_share": []}
+    for index in range(len(years)):
+        for key in median:
+            values = sorted(per_state[a][key][index] for a in ABBRS_50 if per_state[a][key][index])
+            middle = len(values) // 2
+            median[key].append(
+                round(
+                    values[middle]
+                    if len(values) % 2
+                    else (values[middle - 1] + values[middle]) / 2,
+                    5,
+                )
+                if values
+                else 0.0
+            )
+    return per_state, median
+
+
 def build_states(
     finances: pl.DataFrame,
     population: pl.DataFrame,
     governors: pl.DataFrame,
     disasters: dict[str, dict[int, list[dict]]],
     gdp: dict[str, dict[int, float]] | None = None,
+    burden: tuple[dict, dict] | None = None,
 ) -> list[Path]:
     """states/{abbr}.json: everything one state page needs, in one fetch."""
     years = list(YEARS)
@@ -463,6 +529,8 @@ def build_states(
             "debt": debt_out,
             "debt_by_purpose": debt_by_purpose,
             "holdings": holdings,
+            "burden": (burden[0] if burden else {}).get(abbr, {}),
+            "burden_median": burden[1] if burden else {},
             "gdp": [int(state_gdp.get(year, 0)) for year in years],
             "governors": [
                 {k: v for k, v in term.items() if k != "abbr"}
@@ -555,7 +623,14 @@ def build() -> list[Path]:
     governors = load_governors()
     return [
         build_national(finances, population, load_deflator()),
-        *build_states(finances, population, governors, load_disasters(), load_state_gdp()),
+        *build_states(
+            finances,
+            population,
+            governors,
+            load_disasters(),
+            load_state_gdp(),
+            debt_burden(finances),
+        ),
         build_politics(),
         build_geo(),
         build_sources(),

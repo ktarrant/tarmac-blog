@@ -91,23 +91,22 @@ const tiles = [
   },
 ];
 
+const burdenNow = state.burden.interest_share[last];
+const medianNow = state.burden_median.interest_share[last];
+
 const netBorrowing = years.map(
   (_, i) => (state.debt.issued?.[i] ?? 0) - (state.debt.retired?.[i] ?? 0)
 );
 const surplus = years.map((_, i) => revenue[i] - operating[i]);
 
 const debtTable = {
-  headers: ["Fiscal year", "Total owed", "% of state GDP", "Cash & securities held"],
-  rows: years.map((year, i) => {
-    const owed = debtOutstanding[i] ?? 0;
-    const held = Object.values(state.holdings).reduce((sum, v) => sum + (v[i] ?? 0), 0);
-    return [
-      `FY${year}`,
-      fmtBillions(owed),
-      state.gdp[i] ? `${((owed / state.gdp[i]) * 100).toFixed(1)}%` : "—",
-      held ? fmtBillions(held) : "not published",
-    ];
-  }),
+  headers: ["Fiscal year", "Total owed", "Interest as % of revenue", "Debt as months of revenue"],
+  rows: years.map((year, i) => [
+    `FY${year}`,
+    fmtBillions(debtOutstanding[i] ?? 0),
+    `${(state.burden.interest_share[i] * 100).toFixed(2)}%`,
+    `${(state.burden.debt_share[i] * 12).toFixed(1)}`,
+  ]),
 };
 
 const topFunctions = Object.entries(state.expenditure_by_function)
@@ -240,23 +239,25 @@ const dataTable = {
     </ChartFrame>
 
     <ChartFrame
-      title="The debt story"
-      takeaway={`${state.name} owes ${fmtBillions(debtOutstanding[last] ?? 0)} — ${
-                state.gdp[last]
-                  ? `${(((debtOutstanding[last] ?? 0) / state.gdp[last]) * 100).toFixed(1)}% of the state's economy, against ${((debtOutstanding[0] / state.gdp[0]) * 100).toFixed(1)}% in FY${years[0]}`
-                  : "measured against the size of its economy"
-              }.`}
+      title="Is the debt a burden?"
+      takeaway={`${
+        burdenNow > medianNow
+          ? `${state.name} spends more of its revenue on interest than the typical state`
+          : `${state.name} spends less of its revenue on interest than the typical state`
+      } — ${(burdenNow * 100).toFixed(2)}% against a median of ${(medianNow * 100).toFixed(
+        2
+      )}%. Its debt equals ${(state.burden.debt_share[last] * 12).toFixed(
+        1
+      )} months of revenue, down from ${(state.burden.debt_share[0] * 12).toFixed(1)} in FY${years[0]}.`}
       source={{ label: "Census Annual Survey of State Government Finances", href: "https://www.census.gov/programs-surveys/state.html" }}
       table={debtTable}
     >
       <DebtStory
         client:visible
         years={years}
-        debt={state.debt}
-        byPurpose={state.debt_by_purpose}
-        holdings={state.holdings}
-        gdp={state.gdp}
-        population={population}
+        name={state.name}
+        burden={state.burden}
+        median={state.burden_median}
       />
     </ChartFrame>
 

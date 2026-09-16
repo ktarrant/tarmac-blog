@@ -40,6 +40,8 @@ export interface StateData {
   capital_by_function: Record<string, number[]>;
   holdings: Record<string, number[]>;
   gdp: number[];
+  burden: { interest_share: number[]; debt_share: number[] };
+  burden_median: { interest_share: number[]; debt_share: number[] };
   debt_service: number[];
   governors: GovernorTerm[];
   anomalies: Anomaly[];
