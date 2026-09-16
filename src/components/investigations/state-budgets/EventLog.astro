@@ -1,5 +1,6 @@
 ---
 import { anomalyLabel, type Anomaly, type Disaster } from "../../../lib/stateBudgets";
+import { formatDateShort } from "../../../lib/format";
 
 interface Props {
   anomalies: Anomaly[];
@@ -85,11 +86,7 @@ function eventsFor(anomaly: Anomaly): Disaster[] {
               {events.map((event) => (
                 <li>
                   <strong>{event.type}</strong> — {event.title} (declared{" "}
-                  {new Date(event.declared).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
+                  {formatDateShort(event.declared)}
                   ), {money(event.federal_obligated)} federal public-assistance funds obligated
                 </li>
               ))}

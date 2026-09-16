@@ -1,0 +1,118 @@
+---
+title: "What Moves a State Budget"
+summary: "State budgets mostly grind along until something shoves them — a hurricane, an insurance crisis, a school funding law. This is a tool for finding those shoves, one state at a time."
+date: 2026-09-15
+updated: 2026-09-15
+tags: ["budgets", "states", "explorer"]
+featured: true
+draft: false
+---
+
+import ChartFrame from "../../../components/charts/ChartFrame.astro";
+import StateRanking from "../../../components/investigations/state-budgets/StateRanking.svelte";
+import Callout from "../../../components/site/Callout.astro";
+import { withBase } from "../../../lib/withBase";
+
+export const statesIndex = withBase("/investigations/state-budgets/states/");
+
+Most of a state budget is inertia. Medicaid, schools and payroll arrive every
+year whether anyone decides anything or not, and the line on the chart slopes
+gently upward. The interesting part is what happens when something interrupts
+that — and whether the interruption shows up in the numbers at all.
+
+This is less an argument than an instrument. Every state has a page showing
+what it spent, what it borrowed, who was governor, and every year-over-year
+movement large enough to be worth asking about. Some of those movements have
+obvious causes. Some don't. A few turn out not to be real at all.
+
+## Start with your state
+
+<ChartFrame
+  wide
+  title="State government spending per resident, FY2024"
+  takeaway="Alaska and Wyoming spend multiples of what Florida and Georgia do per person — small populations carry the same fixed costs of running a state."
+  source={{ label: "Census Annual Survey of State Government Finances", href: "https://www.census.gov/programs-surveys/state.html" }}
+>
+  <StateRanking client:visible />
+</ChartFrame>
+
+Or go straight to the <a href={statesIndex}>full list of states</a>, which also
+shows how many movements each state has flagged.
+
+## Three things that look identical on a chart
+
+The hardest part of this was not finding jumps in the data. It was working out
+which ones mean anything.
+
+A **real event** looks like Florida in FY2023, when spending on what Census
+files under commercial activities went from $1.2 billion to $14.1 billion and
+back down again. That category, per the Census classification manual, covers
+state disaster insurance — and Hurricane Ian had made landfall that September,
+with $2.9 billion in federal public assistance obligated behind it. The state
+was backstopping a collapsing property insurance market.
+
+A **policy change** looks like Nevada in FY2023, when K-12 spending rose 99% and
+stayed there. No disaster, no emergency — a legislature decided to spend more on
+schools, and the new level persisted. That is a choice, not a shock, and the
+pages label it differently.
+
+An **artifact** looks like Massachusetts in FY2014, when K-12 spending appeared
+to collapse from $5.4 billion to $1.0 billion while administrative spending
+tripled in the same year — and both snapped back the next. Nothing happened.
+Money was booked to the wrong line. Every state page lists these separately,
+under the movements excluded as data artifacts, because presenting a
+bookkeeping error as a policy decision is the fastest way to be confidently
+wrong.
+
+<Callout>
+  Where a federally declared disaster falls in the same fiscal year as a
+  movement, it is shown alongside it. That is a coincidence in time, not proof
+  of cause — and disasters are only shown against spending, borrowing and
+  federal aid, because a hurricane does not raise income tax receipts.
+</Callout>
+
+## What the governor bands do and don't tell you
+
+Each state's timeline is shaded by who held the governorship. It is the obvious
+thing to want to look at, and the easiest thing to over-read.
+
+Governors preside over budgets more than they control them. Medicaid enrolment,
+federal aid formulas and school funding statutes drive most of the year-to-year
+movement, and they do not care who won the last election. Two of the largest
+movements in this dataset — Florida's insurance intervention and the flood of
+federal pandemic money in FY2020 and FY2021 — would have happened under anyone.
+
+The bands are there so you can see the correlation and judge it, not so the
+site can claim a cause.
+
+## Sources & methods
+
+The spending, revenue and debt figures come from the **Census Bureau's Annual
+Survey of State Government Finances**, which puts every state on a common
+classification rather than each state's own budget categories. Totals here are
+computed from the detail item codes rather than taken from Census's published
+aggregates; for every year where the two definitions agree, they match exactly,
+for all fifty states.
+
+Disasters come from **FEMA's OpenFEMA declarations**, with federal obligations
+attached, mapped into each state's own fiscal year — which is why Hurricane Ian,
+in September 2022, counts as FY2023 in Florida but FY2022 in Alabama. Governor
+terms come from **Wikidata**, hand-corrected where a party switch made the
+record ambiguous. Population is Census; inflation adjustment uses the BEA GDP
+price deflator.
+
+Three limits worth stating plainly:
+
+- **The range is FY2012 to FY2024.** Census's API advertises data back to 1967
+  but returns nothing before 2012. That means the 2001 and 2008–09 recessions
+  are out of reach, and only the pandemic is visible here.
+- **Census changed its own definitions between FY2021 and FY2022**, and dropped a
+  lot of item-code detail at the same time. Everything here is computed on one
+  definition across all years to avoid a false step in the middle of every
+  chart, but categories that shifted are flagged on each state page.
+- **There is no Medicaid line.** Census folds it into public welfare, so that
+  category is mostly, but not only, Medicaid.
+
+The pipeline that produces all of this is
+[in the repository](https://github.com/ktarrant/tarmac-blog/tree/main/pipelines),
+along with the checks that keep it honest.

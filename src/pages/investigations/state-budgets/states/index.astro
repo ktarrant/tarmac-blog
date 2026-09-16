@@ -40,6 +40,9 @@ const year = 2024;
   description="Spending, revenue, debt and the events that moved the budget, for all 50 states."
 >
   <section class="page">
+    <nav class="crumbs">
+      <a href={withBase("/investigations/state-budgets/")}>← What Moves a State Budget</a>
+    </nav>
     <h1>Explore your state</h1>
     <p class="lede">
       Every state's budget from FY2012 to FY{year}: what it spends, what it
@@ -81,6 +84,11 @@ const year = 2024;
     max-width: var(--measure-wide);
     margin: 2rem auto 4rem;
     padding: 0 1rem;
+  }
+
+  .crumbs {
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
   }
 
   .lede {

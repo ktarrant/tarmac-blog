@@ -1,6 +1,7 @@
 ---
 import { withBase } from "../../lib/withBase";
 import TagList from "./TagList.astro";
+import { formatDate } from "../../lib/format";
 
 interface Props {
   slug: string;
@@ -12,7 +13,7 @@ interface Props {
 }
 
 const { slug, title, summary, date, tags, cover } = Astro.props;
-const formattedDate = date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+const formattedDate = formatDate(date);
 ---
 
 <a class="card" href={withBase(`/investigations/${slug}/`)}>

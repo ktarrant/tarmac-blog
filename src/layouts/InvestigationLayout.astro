@@ -2,6 +2,7 @@
 import BaseLayout from "./BaseLayout.astro";
 import TagList from "../components/site/TagList.astro";
 import TOC from "../components/site/TOC.astro";
+import { formatDate } from "../lib/format";
 import "../styles/prose.css";
 
 interface Props {
@@ -14,7 +15,7 @@ interface Props {
 }
 
 const { title, summary, date, updated, tags, headings } = Astro.props;
-const formattedDate = date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+const formattedDate = formatDate(date);
 ---
 
 <BaseLayout title={title} description={summary}>
@@ -24,7 +25,7 @@ const formattedDate = date.toLocaleDateString("en-US", { year: "numeric", month:
       <p class="summary">{summary}</p>
       <div class="byline">
         <time datetime={date.toISOString()}>{formattedDate}</time>
-        {updated && <span> · updated {updated.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</span>}
+        {updated && <span> · updated {formatDate(updated)}</span>}
       </div>
       <TagList tags={tags} />
     </header>
