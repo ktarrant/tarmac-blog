@@ -99,9 +99,9 @@ def load_finances(years: range | None = None) -> pl.DataFrame:
                 }
             )
 
-    # guarantee is null for everything except debt, and the debt rows sort late
+    # purpose is null for everything except debt, and the debt rows sort late
     # enough that inferring the column type from the first rows picks Null.
-    return pl.DataFrame(rows, schema_overrides={"guarantee": pl.Utf8}).sort(
+    return pl.DataFrame(rows, schema_overrides={"purpose": pl.Utf8}).sort(
         ["abbr", "year", "item_code"]
     )
 
@@ -363,16 +363,16 @@ def build_states(
 
         # Available only through FY2021: Census stopped reporting the split
         # when it dropped conduit debt.
-        guarantee = (
+        by_purpose = (
             state.filter((pl.col("flow") == "debt") & (pl.col("component") == "outstanding_end"))
-            .group_by(["guarantee", "year"])
+            .group_by(["purpose", "year"])
             .agg(pl.col("amount").sum())
         )
-        debt_by_guarantee = {}
-        for kind in sorted(guarantee["guarantee"].drop_nulls().unique().to_list()):
-            rows_ = guarantee.filter(pl.col("guarantee") == kind)
+        debt_by_purpose = {}
+        for kind in sorted(by_purpose["purpose"].drop_nulls().unique().to_list()):
+            rows_ = by_purpose.filter(pl.col("purpose") == kind)
             lookup_ = dict(zip(rows_["year"].to_list(), rows_["amount"].to_list()))
-            debt_by_guarantee[kind] = [lookup_.get(year, 0) for year in years]
+            debt_by_purpose[kind] = [lookup_.get(year, 0) for year in years]
 
         pop = population.filter(pl.col("abbr") == abbr)
         pop_lookup = dict(zip(pop["year"].to_list(), pop["population"].to_list()))
@@ -420,7 +420,7 @@ def build_states(
             "debt_service": by_component.get("interest_on_debt", [0] * len(years)),
             "revenue_by_source": revenue_by_source,
             "debt": debt_out,
-            "debt_by_guarantee": debt_by_guarantee,
+            "debt_by_purpose": debt_by_purpose,
             "governors": [
                 {k: v for k, v in term.items() if k != "abbr"}
                 for term in governors.filter(pl.col("abbr") == abbr).to_dicts()

@@ -236,7 +236,7 @@ const dataTable = {
 
     <ChartFrame
       title="The debt story"
-      takeaway={`Bars are the annual flows — what ${state.name} built, and how much it borrowed net of repayment. The line is the stock those flows accumulate into: what it still owes.`}
+      takeaway={`Bars are the annual flows — what ${state.name} built, and how much it borrowed net of repayment. The shaded area behind them is the stock those flows accumulate into: what it still owes, and how much of that is really its own.`}
       source={{ label: "Census Annual Survey of State Government Finances", href: "https://www.census.gov/programs-surveys/state.html" }}
       table={debtTable}
     >
@@ -247,7 +247,7 @@ const dataTable = {
         operating={operating}
         revenue={revenue}
         debt={state.debt}
-        byGuarantee={state.debt_by_guarantee}
+        byPurpose={state.debt_by_purpose}
         population={population}
       />
     </ChartFrame>

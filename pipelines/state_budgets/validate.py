@@ -125,8 +125,9 @@ def check_finances(problems: list[str]) -> None:
         )
 
     # Debt outstanding has its own published total and its own way of going
-    # wrong: it is reported in two tracks (full faith and credit, nonguaranteed)
-    # that must be added, and summing only one silently understates every state.
+    # wrong: it is reported in two tracks (conduit debt issued for private
+    # borrowers, and the state's own debt) that must be added, and summing only
+    # one silently understates every state.
     debt_totals = (
         finances.filter((pl.col("flow") == "debt") & (pl.col("component") == "outstanding_end"))
         .group_by(["abbr", "year"])

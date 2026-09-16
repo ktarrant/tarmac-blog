@@ -10,7 +10,7 @@ def test_k12_aid_to_school_districts_is_counted_as_k12():
         "flow": "expenditure",
         "function": "k12",
         "component": "aid_to_school_districts",
-        "guarantee": None,
+        "purpose": None,
     }
     assert categories.classify("E12")["function"] == "k12"
 
@@ -21,7 +21,7 @@ def test_medicaid_lands_in_public_welfare():
         "flow": "expenditure",
         "function": "public_welfare",
         "component": "current_operations",
-        "guarantee": None,
+        "purpose": None,
     }
 
 
@@ -35,7 +35,7 @@ def test_federal_aid_is_revenue_not_expenditure():
         "flow": "revenue",
         "function": "public_welfare",
         "component": "federal_aid",
-        "guarantee": None,
+        "purpose": None,
     }
 
 
@@ -44,24 +44,25 @@ def test_debt_components_stay_separate():
         "flow": "debt",
         "function": "long_term_debt",
         "component": "outstanding_end",
-        "guarantee": "nonguaranteed",
+        "purpose": "public_purpose",
     }
     assert categories.classify("29U")["component"] == "issued"
 
 
-def test_total_debt_needs_both_the_guaranteed_and_nonguaranteed_tracks():
+def test_total_debt_needs_both_debt_purposes():
     """Census reports long-term debt in two tracks and its published total is
-    their sum. Counting only the U codes understated every state's debt --
-    Maryland FY2021 by $10.8B of $30.7B -- and made the FY2022 definition
-    change look like debt had jumped 31% when it actually fell."""
-    guaranteed = categories.classify("44T")
-    nonguaranteed = categories.classify("49U")
+    their sum: the T codes are conduit debt issued for private borrowers, the U
+    codes the state's own. Counting only U understated every state -- Maryland
+    FY2021 by $10.8B of $30.7B -- and made the FY2022 removal of conduit debt
+    look like debt had jumped 31% when the total actually fell."""
+    private = categories.classify("44T")
+    own = categories.classify("49U")
 
-    assert guaranteed["component"] == nonguaranteed["component"] == "outstanding_end"
-    assert guaranteed["guarantee"] == "full_faith_and_credit"
-    assert nonguaranteed["guarantee"] == "nonguaranteed"
-    # The issued/retired pairs have to line up the same way or the flows are
-    # counted on one track and the stock on two.
+    assert private["component"] == own["component"] == "outstanding_end"
+    assert private["purpose"] == "private_purpose"
+    assert own["purpose"] == "public_purpose"
+    # The issued/retired pairs must line up the same way, or the flows get
+    # counted on one track while the stock is counted on two.
     assert categories.classify("24T")["component"] == categories.classify("29U")["component"]
     assert categories.classify("34T")["component"] == categories.classify("39U")["component"]
 

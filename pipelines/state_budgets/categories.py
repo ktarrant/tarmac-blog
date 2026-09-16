@@ -129,26 +129,29 @@ EXCLUDED_FROM_EXPENDITURE = {"27"}
 
 # Debt and cash codes don't follow the prefix/function scheme.
 #
-# Long-term debt is reported in two tracks that have to be added to get a total:
-# the T codes are full-faith-and-credit debt (general obligation, backed by the
-# state's taxing power) and the U codes are nonguaranteed (revenue bonds and
-# similar, repaid from a specific stream). Census's own published total, SF0455,
-# equals T + U — taking U alone understates a state's debt by the whole general
-# obligation share, which for Maryland in FY2021 was $10.8B of $30.7B.
+# Long-term debt is reported in two tracks that must be added to reach Census's
+# published total (SF0455). The classification manual names them: the T codes
+# are "Public Debt For Private Purposes", which it notes is "often referred to
+# as conduit debt" — borrowing a state issues on behalf of private borrowers
+# (industrial revenue, pollution control, private hospitals and colleges) who
+# repay it, and which is not really a burden on the state's taxpayers. The U
+# codes are "Unspecified Public Purposes": the state's own debt.
 #
-# From FY2022 the T codes stop: Census dropped conduit debt not guaranteed by
-# the issuer after a GASB pronouncement, and folded what remained into the U
-# series. So the guaranteed/nonguaranteed split exists only through FY2021, and
-# the total legitimately steps down in FY2022.
+# This is why the total steps down in FY2022. A GASB pronouncement said conduit
+# debt with no guarantee from the issuer is not the issuer's liability, so
+# Census dropped the T codes entirely; the guaranteed remainder was folded into
+# the U series. Counting only U understates pre-2022 debt against the published
+# total, and counting the total without saying what is in it overstates what
+# states actually owe.
 DEBT_CODES = {
-    "19T": ("long_term_debt", "outstanding_beginning", "full_faith_and_credit"),
-    "24T": ("long_term_debt", "issued", "full_faith_and_credit"),
-    "34T": ("long_term_debt", "retired", "full_faith_and_credit"),
-    "44T": ("long_term_debt", "outstanding_end", "full_faith_and_credit"),
-    "19U": ("long_term_debt", "outstanding_beginning", "nonguaranteed"),
-    "29U": ("long_term_debt", "issued", "nonguaranteed"),
-    "39U": ("long_term_debt", "retired", "nonguaranteed"),
-    "49U": ("long_term_debt", "outstanding_end", "nonguaranteed"),
+    "19T": ("long_term_debt", "outstanding_beginning", "private_purpose"),
+    "24T": ("long_term_debt", "issued", "private_purpose"),
+    "34T": ("long_term_debt", "retired", "private_purpose"),
+    "44T": ("long_term_debt", "outstanding_end", "private_purpose"),
+    "19U": ("long_term_debt", "outstanding_beginning", "public_purpose"),
+    "29U": ("long_term_debt", "issued", "public_purpose"),
+    "39U": ("long_term_debt", "retired", "public_purpose"),
+    "49U": ("long_term_debt", "outstanding_end", "public_purpose"),
     "61V": ("short_term_debt", "outstanding_beginning", "short_term"),
     "64V": ("short_term_debt", "outstanding_end", "short_term"),
 }
@@ -172,12 +175,12 @@ def classify(item_code: str) -> dict[str, str] | None:
     holdings, and anything unrecognized), so callers can ignore them.
     """
     if item_code in DEBT_CODES:
-        kind, component, guarantee = DEBT_CODES[item_code]
+        kind, component, purpose = DEBT_CODES[item_code]
         return {
             "flow": "debt",
             "function": kind,
             "component": component,
-            "guarantee": guarantee,
+            "purpose": purpose,
         }
 
     prefix, digits = item_code[0], item_code[1:]
@@ -187,7 +190,7 @@ def classify(item_code: str) -> dict[str, str] | None:
             "flow": "insurance_trust",
             "function": "insurance_trust",
             "component": item_code,
-            "guarantee": None,
+            "purpose": None,
         }
 
     if prefix in SPENDING_PREFIXES:
@@ -195,7 +198,7 @@ def classify(item_code: str) -> dict[str, str] | None:
             "flow": "expenditure_excluded" if digits in EXCLUDED_FROM_EXPENDITURE else "expenditure",
             "function": FUNCTIONS.get(digits, "other"),
             "component": SPENDING_PREFIXES[prefix],
-            "guarantee": None,
+            "purpose": None,
         }
 
     if prefix in REVENUE_PREFIXES:
@@ -203,7 +206,7 @@ def classify(item_code: str) -> dict[str, str] | None:
             "flow": "revenue",
             "function": FUNCTIONS.get(digits, "other"),
             "component": REVENUE_PREFIXES[prefix],
-            "guarantee": None,
+            "purpose": None,
         }
 
     return None

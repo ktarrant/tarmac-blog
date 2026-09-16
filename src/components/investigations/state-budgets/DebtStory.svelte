@@ -8,7 +8,7 @@
     operating,
     revenue,
     debt,
-    byGuarantee = {},
+    byPurpose = {},
     population = [],
   }: {
     years: number[];
@@ -16,7 +16,7 @@
     operating: number[];
     revenue: number[];
     debt: Record<string, number[]>;
-    byGuarantee?: Record<string, number[]>;
+    byPurpose?: Record<string, number[]>;
     population?: number[];
   } = $props();
 
@@ -29,6 +29,14 @@
   // years' issuance refinances bonds being retired the same year.
   const net = $derived(years.map((_, i) => (issued[i] ?? 0) - (retired[i] ?? 0)));
   const surplus = $derived(years.map((_, i) => (revenue[i] ?? 0) - (operating[i] ?? 0)));
+
+  // Two tracks, stacked to the published total. Conduit debt is borrowing the
+  // state issues for private borrowers who repay it, so it inflates the total
+  // without being a burden on taxpayers — which is why it was dropped in FY2022.
+  const conduit = $derived(byPurpose.private_purpose ?? years.map(() => 0));
+  const ownDebt = $derived(
+    byPurpose.public_purpose ?? years.map((_, i) => outstanding[i] ?? 0)
+  );
 
   const billions = (value: number) => `$${(value / 1e9).toFixed(2)}B`;
 
@@ -44,21 +52,19 @@
               (outstanding[i] ?? 0) / population[i]
             ).toLocaleString()} per resident</span>`
           : "";
-        const go = byGuarantee.full_faith_and_credit?.[i] ?? 0;
-        const rev = byGuarantee.nonguaranteed?.[i] ?? 0;
         // The split stops after FY2021, when Census dropped conduit debt.
-        const split = go
+        const split = conduit[i]
           ? `<br/><span style="color:${chrome.inkMuted}">of which ${billions(
-              go
-            )} general obligation, ${billions(rev)} revenue-backed</span>`
+              conduit[i]
+            )} was conduit debt issued for private borrowers</span>`
           : "";
         return `<strong>FY${years[i]}</strong><br/>
-          Owed at year end: <strong>${billions(outstanding[i] ?? 0)}</strong>${perPerson}<br/>
+          Owed at year end: <strong>${billions(outstanding[i] ?? 0)}</strong>${perPerson}${split}<br/>
           Net new borrowing: <strong>${billions(net[i])}</strong><br/>
           Capital spending: <strong>${billions(capital[i] ?? 0)}</strong><br/>
           <span style="color:${chrome.inkMuted}">Operating surplus that year: ${billions(
             surplus[i]
-          )}</span>${split}`;
+          )}</span>`;
       },
     },
     xAxis: { type: "category", data: years.map(String) },
@@ -68,15 +74,28 @@
     },
     series: [
       {
-        name: "Total owed",
+        name: "The state's own debt",
         type: "line",
-        data: outstanding,
-        lineStyle: { width: 2 },
-        itemStyle: { color: chrome.ink },
-        areaStyle: { color: chrome.ink, opacity: 0.06 },
-        symbol: "circle",
-        symbolSize: 8,
-        z: 3,
+        stack: "owed",
+        data: ownDebt,
+        lineStyle: { width: 0 },
+        // itemStyle drives the legend swatch; without it the legend shows a
+        // default palette colour that doesn't match the fill.
+        itemStyle: { color: categorical[6] },
+        areaStyle: { color: categorical[6], opacity: 0.32 },
+        symbol: "none",
+        z: 2,
+      },
+      {
+        name: "Conduit debt (issued for private borrowers)",
+        type: "line",
+        stack: "owed",
+        data: conduit,
+        lineStyle: { width: 0 },
+        itemStyle: { color: chrome.inkMuted },
+        areaStyle: { color: chrome.inkMuted, opacity: 0.22 },
+        symbol: "none",
+        z: 2,
       },
       {
         name: "Capital spending",
@@ -84,6 +103,7 @@
         data: capital,
         barMaxWidth: 16,
         itemStyle: { color: categorical[0], borderRadius: [4, 4, 0, 0] },
+        z: 4,
       },
       {
         name: "Net new borrowing",
@@ -91,6 +111,7 @@
         data: net,
         barMaxWidth: 16,
         itemStyle: { color: categorical[3], borderRadius: [4, 4, 0, 0] },
+        z: 4,
         markLine: {
           silent: true,
           symbol: "none",
@@ -105,13 +126,14 @@
 
 <EChart {option} height="380px" />
 
-{#if byGuarantee.full_faith_and_credit?.some((v) => v > 0)}
+{#if conduit.some((v) => v > 0)}
   <p class="note">
-    Total owed steps down in FY2022 because Census stopped counting conduit debt
-    — borrowing a state issues on another body's behalf without guaranteeing it —
-    after a change in accounting standards. That is a change in what is measured,
-    not a repayment. The split between general-obligation and revenue-backed debt
-    stops at the same point.
+    The grey band is conduit debt — bonds a state issues on behalf of private
+    borrowers such as industrial developers, hospitals and colleges, who repay
+    them. It counts against the state on paper without being a burden on its
+    taxpayers. Accounting standards changed in FY2022 and Census stopped
+    reporting it, which is why the total drops that year: nothing was repaid,
+    it stopped being counted.
   </p>
 {/if}
 
