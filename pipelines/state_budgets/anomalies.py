@@ -28,6 +28,11 @@ CURATED = Path(__file__).resolve().parent / "curated"
 RELATIVE_THRESHOLD = 0.35
 ABSOLUTE_THRESHOLD = 200_000_000
 
+# Borrowing is lumpy by nature — a state issues bonds when it issues them, and a
+# 50% swing between two years is ordinary treasury management rather than an
+# event. Debt has to move much harder before it is worth a reader's attention.
+DEBT_RELATIVE_THRESHOLD = 0.80
+
 # Census restructured its item codes for FY2022; a level shift at exactly this
 # year is attributed to that rather than to anything a state did.
 SCHEMA_CHANGE_YEAR = 2022
@@ -99,17 +104,24 @@ def detect(
     for metric, series in series_by_metric.items():
         # A spike is two jumps — up, then back down. Reporting the second as its
         # own anomaly reads as "spending collapsed" when it only returned to
-        # normal, so the year after a spike is skipped.
+        # normal, so the year after a spike is skipped — unless that year moves
+        # substantially more than the spike did, in which case it is its own
+        # event and suppressing it would hide the bigger story.
         settled_after: int | None = None
+        settled_size = 0
 
         for index in range(1, len(series)):
-            if settled_after == index:
+            move = abs(series[index] - series[index - 1])
+            if settled_after == index and move <= settled_size * 1.5:
                 continue
             previous, amount = series[index - 1], series[index]
             if previous <= 0:
                 continue
             change = (amount - previous) / previous
-            if abs(change) < RELATIVE_THRESHOLD or abs(amount - previous) < ABSOLUTE_THRESHOLD:
+            threshold = (
+                DEBT_RELATIVE_THRESHOLD if metric.startswith("debt.") else RELATIVE_THRESHOLD
+            )
+            if abs(change) < threshold or abs(amount - previous) < ABSOLUTE_THRESHOLD:
                 continue
 
             year = years[index]
@@ -126,6 +138,7 @@ def detect(
 
             if reverts:
                 settled_after = index + 1
+                settled_size = abs(amount - previous)
 
             budget = (budget_by_year or [])[index] if budget_by_year else 0
             impact = abs(amount - previous) / budget if budget else 0.0

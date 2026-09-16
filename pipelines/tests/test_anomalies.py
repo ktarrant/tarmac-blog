@@ -39,6 +39,24 @@ def test_the_year_a_spike_reverts_is_not_reported_again():
     assert found[0].year == YEARS[5]
 
 
+def test_a_small_dip_does_not_suppress_the_big_spike_after_it():
+    """Florida's disaster-insurance line dipped in FY2022 and then jumped from
+    $1.2B to $14.1B in FY2023. Skipping the year after any spike hid that
+    entirely — the largest single movement in the state's budget."""
+    series = {
+        "expenditure.commercial_and_insurance": [
+            1_800_000_000, 1_400_000_000, 1_000_000_000, 1_000_000_000,
+            800_000_000, 800_000_000, 3_400_000_000, 4_900_000_000,
+            2_200_000_000, 2_200_000_000, 1_200_000_000, 14_100_000_000,
+            1_600_000_000,
+        ]
+    }
+    found = anomalies.detect(series, YEARS)
+    flagged = {a.year for a in found}
+
+    assert 2023 in flagged
+
+
 def test_offsetting_moves_in_one_year_are_a_suspected_coding_error():
     """Massachusetts FY2014 booked billions of K-12 as administration and put
     it back the next year."""

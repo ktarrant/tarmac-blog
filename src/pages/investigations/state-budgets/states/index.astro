@@ -1,0 +1,129 @@
+---
+import fs from "node:fs/promises";
+import path from "node:path";
+import BaseLayout from "../../../../layouts/BaseLayout.astro";
+import { withBase } from "../../../../lib/withBase";
+import type { StateData } from "../../../../lib/stateBudgets";
+
+const dir = path.join(process.cwd(), "public/data/state-budgets/states");
+const files = (await fs.readdir(dir)).filter((f) => f.endsWith(".json"));
+const states = (
+  await Promise.all(
+    files.map(async (file) => JSON.parse(await fs.readFile(path.join(dir, file), "utf-8")) as StateData)
+  )
+)
+  .map((state) => {
+    const last = state.years.length - 1;
+    const spending = Object.values(state.expenditure_by_function).reduce(
+      (sum, values) => sum + (values[last] ?? 0),
+      0
+    );
+    const population = state.population[last] ?? 0;
+    const events = state.anomalies.filter(
+      (a) => a.kind === "spike" || a.kind === "level_shift"
+    ).length;
+    return {
+      abbr: state.abbr,
+      name: state.name,
+      spending,
+      perCapita: population ? spending / population : 0,
+      events,
+    };
+  })
+  .sort((a, b) => a.name.localeCompare(b.name));
+
+const year = 2024;
+---
+
+<BaseLayout
+  title="Explore your state"
+  description="Spending, revenue, debt and the events that moved the budget, for all 50 states."
+>
+  <section class="page">
+    <h1>Explore your state</h1>
+    <p class="lede">
+      Every state's budget from FY2012 to FY{year}: what it spends, what it
+      borrows, who was in office, and the year-over-year jumps big enough to ask
+      about.
+    </p>
+
+    <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>State</th>
+          <th class="num">Spending FY{year}</th>
+          <th class="num">Per resident</th>
+          <th class="num">Flagged moves</th>
+        </tr>
+      </thead>
+      <tbody>
+        {states.map((state) => (
+          <tr>
+            <td>
+              <a href={withBase(`/investigations/state-budgets/states/${state.abbr.toLowerCase()}/`)}>
+                {state.name}
+              </a>
+            </td>
+            <td class="num">${(state.spending / 1e9).toFixed(1)}B</td>
+            <td class="num">${Math.round(state.perCapita).toLocaleString()}</td>
+            <td class="num">{state.events}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .page {
+    max-width: var(--measure-wide);
+    margin: 2rem auto 4rem;
+    padding: 0 1rem;
+  }
+
+  .lede {
+    color: var(--color-text-secondary);
+    max-width: 66ch;
+  }
+
+  .table-scroll {
+    margin-top: 2rem;
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    min-width: 32rem;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+  }
+
+  th,
+  td {
+    text-align: left;
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  th {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-muted);
+    font-weight: 600;
+  }
+
+  .num {
+    text-align: right;
+  }
+
+  td a {
+    text-decoration: none;
+  }
+
+  tbody tr:hover {
+    background: var(--color-surface);
+  }
+</style>

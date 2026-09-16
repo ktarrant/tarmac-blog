@@ -1,0 +1,280 @@
+---
+import fs from "node:fs/promises";
+import path from "node:path";
+import BaseLayout from "../../../../layouts/BaseLayout.astro";
+import EventLog from "../../../../components/investigations/state-budgets/EventLog.astro";
+import BudgetTimeline from "../../../../components/investigations/state-budgets/BudgetTimeline.svelte";
+import FunctionBreakdown from "../../../../components/investigations/state-budgets/FunctionBreakdown.svelte";
+import DebtChart from "../../../../components/investigations/state-budgets/DebtChart.svelte";
+import ChartFrame from "../../../../components/charts/ChartFrame.astro";
+import { withBase } from "../../../../lib/withBase";
+import {
+  governorForYear,
+  label,
+  PARTY_NAMES,
+  type StateData,
+} from "../../../../lib/stateBudgets";
+
+export async function getStaticPaths() {
+  const dir = path.join(process.cwd(), "public/data/state-budgets/states");
+  const files = (await fs.readdir(dir)).filter((f) => f.endsWith(".json"));
+  const states = await Promise.all(
+    files.map(async (file) => JSON.parse(await fs.readFile(path.join(dir, file), "utf-8")) as StateData)
+  );
+  states.sort((a, b) => a.name.localeCompare(b.name));
+
+  return states.map((state, index) => ({
+    params: { abbr: state.abbr.toLowerCase() },
+    props: {
+      state,
+      previous: states[(index - 1 + states.length) % states.length],
+      next: states[(index + 1) % states.length],
+      all: states.map((s) => ({ abbr: s.abbr, name: s.name })),
+    },
+  }));
+}
+
+const { state, previous, next, all } = Astro.props;
+
+const years = state.years;
+const last = years.length - 1;
+const spending = years.map((_, i) =>
+  Object.values(state.expenditure_by_function).reduce((sum, v) => sum + (v[i] ?? 0), 0)
+);
+const revenue = years.map((_, i) =>
+  Object.values(state.revenue_by_source).reduce((sum, v) => sum + (v[i] ?? 0), 0)
+);
+const population = state.population;
+const debtOutstanding = state.debt.outstanding_end ?? [];
+const governor = governorForYear(state.governors, years[last], state.fiscal_year_start_month);
+
+const fmtBillions = (v: number) => `$${(v / 1e9).toFixed(1)}B`;
+const fmtDollars = (v: number) => `$${Math.round(v).toLocaleString()}`;
+const change = (series: number[]) =>
+  series[last - 1] ? (series[last] - series[last - 1]) / series[last - 1] : 0;
+
+const tiles = [
+  { label: `Total spending, FY${years[last]}`, value: fmtBillions(spending[last]), delta: change(spending) },
+  {
+    label: "Spending per resident",
+    value: population[last] ? fmtDollars(spending[last] / population[last]) : "—",
+    delta: change(spending.map((v, i) => (population[i] ? v / population[i] : 0))),
+  },
+  { label: "Long-term debt outstanding", value: fmtBillions(debtOutstanding[last] ?? 0), delta: change(debtOutstanding) },
+  {
+    label: "Federal share of revenue",
+    value: revenue[last]
+      ? `${Math.round(((state.revenue_by_source.federal_aid?.[last] ?? 0) / revenue[last]) * 100)}%`
+      : "—",
+    delta: null,
+  },
+];
+
+const topFunctions = Object.entries(state.expenditure_by_function)
+  .map(([key, values]) => ({ key, value: values[last] ?? 0 }))
+  .sort((a, b) => b.value - a.value)
+  .slice(0, 3);
+
+const fyStart = new Date(Date.UTC(2000, state.fiscal_year_start_month - 1, 1)).toLocaleString("en-US", {
+  month: "long",
+  timeZone: "UTC",
+});
+
+const dataTable = {
+  headers: ["Fiscal year", "Spending", "Revenue", "Debt outstanding"],
+  rows: years.map((year, i) => [
+    `FY${year}`,
+    fmtBillions(spending[i]),
+    fmtBillions(revenue[i]),
+    fmtBillions(debtOutstanding[i] ?? 0),
+  ]),
+};
+---
+
+<BaseLayout
+  title={`${state.name} budget`}
+  description={`How ${state.name} spends, borrows and raises money, FY${years[0]}–FY${years[last]}, with the events that moved the budget.`}
+>
+  <article class="state">
+    <nav class="crumbs">
+      <a href={withBase("/investigations/state-budgets/states/")}>All states</a>
+    </nav>
+
+    <header>
+      <h1>{state.name}</h1>
+      <p class="sub">
+        Fiscal years {years[0]}–{years[last]}. {state.name}'s budget year begins in {fyStart}.
+        {governor && (
+          <>
+            {" "}Currently governed by <strong>{governor.name}</strong>
+            {governor.party && ` (${PARTY_NAMES[governor.party]})`}.
+          </>
+        )}
+      </p>
+    </header>
+
+    <section class="tiles">
+      {tiles.map((tile) => (
+        <div class="tile">
+          <span class="tile-label">{tile.label}</span>
+          <span class="tile-value">{tile.value}</span>
+          {tile.delta !== null && (
+            <span class={`tile-delta ${tile.delta >= 0 ? "up" : "down"}`}>
+              {tile.delta >= 0 ? "▲" : "▼"} {Math.abs(tile.delta * 100).toFixed(1)}% vs FY{years[last - 1]}
+            </span>
+          )}
+        </div>
+      ))}
+    </section>
+
+    <ChartFrame
+      title="Spending and revenue, with who was in office"
+      takeaway={`Shaded bands mark each governor's term. ${topFunctions
+        .map((f) => label(f.key))
+        .join(", ")} are the largest spending categories.`}
+      source={{ label: "Census Annual Survey of State Government Finances", href: "https://www.census.gov/programs-surveys/state.html" }}
+      table={dataTable}
+    >
+      <BudgetTimeline
+        client:visible
+        years={years}
+        spending={spending}
+        revenue={revenue}
+        governors={state.governors}
+        anomalies={state.anomalies}
+        fiscalStartMonth={state.fiscal_year_start_month}
+        population={population}
+      />
+    </ChartFrame>
+
+    <EventLog anomalies={state.anomalies} disasters={state.disasters} />
+
+    <ChartFrame
+      title="Where the money goes"
+      takeaway="Spending by function, stacked. Public welfare — which is mostly Medicaid — is the largest category in most states."
+      source={{ label: "Census, author's classification of item codes", href: "https://www.census.gov/programs-surveys/state.html" }}
+    >
+      <FunctionBreakdown client:visible years={years} byFunction={state.expenditure_by_function} />
+    </ChartFrame>
+
+    <ChartFrame
+      title="Debt: issued, retired, outstanding"
+      takeaway="What the state borrowed and paid down each year, against the total it owes."
+      source={{ label: "Census Annual Survey of State Government Finances", href: "https://www.census.gov/programs-surveys/state.html" }}
+    >
+      <DebtChart client:visible years={years} debt={state.debt} />
+    </ChartFrame>
+
+    <nav class="pager">
+      <a href={withBase(`/investigations/state-budgets/states/${previous.abbr.toLowerCase()}/`)}>
+        ← {previous.name}
+      </a>
+      <label class="picker">
+        <span class="visually-hidden">Jump to a state</span>
+        <select data-state-picker>
+          {all.map((s) => (
+            <option value={s.abbr.toLowerCase()} selected={s.abbr === state.abbr}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <a href={withBase(`/investigations/state-budgets/states/${next.abbr.toLowerCase()}/`)}>
+        {next.name} →
+      </a>
+    </nav>
+  </article>
+</BaseLayout>
+
+<script>
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  document.querySelector<HTMLSelectElement>("[data-state-picker]")?.addEventListener("change", (event) => {
+    const abbr = (event.target as HTMLSelectElement).value;
+    window.location.href = `${base}/investigations/state-budgets/states/${abbr}/`;
+  });
+</script>
+
+<style>
+  .state {
+    max-width: var(--measure-wide);
+    margin: 0 auto;
+    padding: 1rem 1rem 4rem;
+  }
+
+  .crumbs {
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+  }
+
+  header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .sub {
+    color: var(--color-text-secondary);
+    max-width: 68ch;
+  }
+
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin: 2rem 0;
+  }
+
+  .tile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+  }
+
+  .tile-label {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+
+  .tile-value {
+    font-family: var(--font-heading);
+    font-size: 1.6rem;
+    font-weight: 700;
+  }
+
+  .tile-delta {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+  }
+
+  .tile-delta.up {
+    color: var(--color-good);
+  }
+
+  .tile-delta.down {
+    color: var(--color-serious);
+  }
+
+  .pager {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--color-border);
+    flex-wrap: wrap;
+  }
+
+  .pager select {
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 0.4rem 0.6rem;
+    font: inherit;
+    font-size: 0.9rem;
+  }
+</style>

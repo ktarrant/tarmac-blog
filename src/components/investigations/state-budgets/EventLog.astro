@@ -1,0 +1,221 @@
+---
+import { anomalyLabel, type Anomaly, type Disaster } from "../../../lib/stateBudgets";
+
+interface Props {
+  anomalies: Anomaly[];
+  disasters: Record<string, Disaster[]>;
+  limit?: number;
+}
+
+const { anomalies, disasters, limit = 8 } = Astro.props;
+
+// Real movements first; data artifacts are listed separately below so they are
+// never mistaken for something a state did.
+const real = anomalies.filter((a) => a.kind === "spike" || a.kind === "level_shift").slice(0, limit);
+const artifacts = anomalies.filter(
+  (a) => a.kind === "census_schema_change" || a.kind === "suspected_coding_error"
+);
+
+const money = (value: number) => `$${(Math.abs(value) / 1e9).toFixed(1)}B`;
+
+const KIND_LABEL: Record<string, string> = {
+  spike: "One-year spike",
+  level_shift: "Stepped to a new level",
+  census_schema_change: "Census reclassification",
+  suspected_coding_error: "Suspected coding error",
+};
+
+// A declaration with a few million behind it can't move a state budget, and
+// listing one next to an unrelated jump implies a connection that isn't there.
+const MATERIAL_DISASTER = 100_000_000;
+
+/** Whether a disaster could plausibly explain a move in this line at all.
+ *
+ * A hurricane drives spending, borrowing and federal aid. It does not raise
+ * income tax receipts — California's FY2021 tax surge was capital gains, and
+ * showing a wildfire beside it invents a link the data doesn't support. */
+function canBeDisasterDriven(metric: string): boolean {
+  return (
+    metric.startsWith("expenditure.") ||
+    metric.startsWith("debt.") ||
+    metric === "revenue.federal_aid"
+  );
+}
+
+/** Material disasters in that fiscal year, biggest first. */
+function eventsFor(anomaly: Anomaly): Disaster[] {
+  if (!canBeDisasterDriven(anomaly.metric)) return [];
+  return (disasters[String(anomaly.year)] ?? [])
+    .filter((d) => d.federal_obligated >= MATERIAL_DISASTER)
+    .slice(0, 3);
+}
+---
+
+<section class="events">
+  <h2>What moved the budget</h2>
+  <p class="lede">
+    Every year-over-year jump big enough to matter, ranked by how much of the
+    state's budget it moved. Where a federally declared disaster fell in the same
+    fiscal year, it is shown alongside — that is a coincidence in time, not proof
+    of cause.
+  </p>
+
+  {real.length === 0 && <p class="empty">No movement large enough to flag.</p>}
+
+  <ol class="list">
+    {real.map((anomaly) => {
+      const events = eventsFor(anomaly);
+      return (
+        <li>
+          <div class="row">
+            <span class="year">FY{anomaly.year}</span>
+            <span class="metric">{anomalyLabel(anomaly.metric)}</span>
+            <span class={`change ${anomaly.change > 0 ? "up" : "down"}`}>
+              {anomaly.change > 0 ? "+" : ""}
+              {Math.round(anomaly.change * 100)}%
+            </span>
+          </div>
+          <div class="detail">
+            {money(anomaly.previous)} → {money(anomaly.amount)} ·{" "}
+            {(anomaly.impact * 100).toFixed(1)}% of the budget ·{" "}
+            <span class="kind">{KIND_LABEL[anomaly.kind]}</span>
+          </div>
+          {events.length > 0 && (
+            <ul class="disasters">
+              {events.map((event) => (
+                <li>
+                  <strong>{event.type}</strong> — {event.title} (declared{" "}
+                  {new Date(event.declared).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                  ), {money(event.federal_obligated)} federal public-assistance funds obligated
+                </li>
+              ))}
+            </ul>
+          )}
+        </li>
+      );
+    })}
+  </ol>
+
+  {artifacts.length > 0 && (
+    <details class="artifacts">
+      <summary>{artifacts.length} movements excluded as data artifacts</summary>
+      <p>
+        These look like events on a chart but are not. Census restructured its
+        item codes for FY2022, which steps some categories to a new level
+        permanently; and money occasionally gets booked to the wrong line for a
+        single year and moved back.
+      </p>
+      <ul>
+        {artifacts.map((anomaly) => (
+          <li>
+            FY{anomaly.year} · {anomalyLabel(anomaly.metric)} ·{" "}
+            {anomaly.change > 0 ? "+" : ""}
+            {Math.round(anomaly.change * 100)}% — {KIND_LABEL[anomaly.kind]}
+          </li>
+        ))}
+      </ul>
+    </details>
+  )}
+</section>
+
+<style>
+  .events {
+    margin: 2.5rem 0;
+  }
+
+  .lede {
+    color: var(--color-text-secondary);
+    max-width: 62ch;
+    font-size: 0.95rem;
+  }
+
+  .empty {
+    color: var(--color-text-muted);
+  }
+
+  .list {
+    list-style: none;
+    margin: 1.5rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .list > li {
+    padding: 0.85rem 1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+  }
+
+  .row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .year {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    color: var(--color-accent);
+  }
+
+  .metric {
+    flex: 1;
+    min-width: 12ch;
+  }
+
+  .change {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .change.up {
+    color: var(--color-good);
+  }
+
+  .change.down {
+    color: var(--color-serious);
+  }
+
+  .detail {
+    margin-top: 0.3rem;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+  }
+
+  .kind {
+    color: var(--color-text-secondary);
+  }
+
+  .disasters {
+    margin: 0.6rem 0 0;
+    padding-left: 1rem;
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+  }
+
+  .disasters li + li {
+    margin-top: 0.25rem;
+  }
+
+  .artifacts {
+    margin-top: 1.5rem;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .artifacts p {
+    max-width: 62ch;
+  }
+
+  .artifacts ul {
+    padding-left: 1.1rem;
+  }
+</style>

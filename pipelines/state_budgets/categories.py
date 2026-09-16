@@ -43,7 +43,11 @@ REVENUE_PREFIXES = {
 # Trailing digits -> reporting function.
 FUNCTIONS = {
     "01": "transportation",     # air transportation
-    "03": "other",
+    # "Miscellaneous commercial activities, NEC" in Census's classification,
+    # which explicitly covers state disaster insurance. It is where Florida's
+    # post-Hurricane-Ian property insurance intervention lands, so it earns its
+    # own category rather than disappearing into "other".
+    "03": "commercial_and_insurance",
     "04": "corrections",
     "05": "corrections",
     "09": "k12",

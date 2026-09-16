@@ -6,6 +6,9 @@ import {
   LegendComponent,
   TitleComponent,
   DatasetComponent,
+  MarkAreaComponent,
+  MarkLineComponent,
+  MarkPointComponent,
 } from "echarts/components";
 import { SVGRenderer } from "echarts/renderers";
 import { registerTarmacTheme } from "./theme";
@@ -27,6 +30,9 @@ export function setupEcharts() {
     LegendComponent,
     TitleComponent,
     DatasetComponent,
+    MarkAreaComponent,
+    MarkLineComponent,
+    MarkPointComponent,
     SVGRenderer,
   ]);
   registerTarmacTheme();

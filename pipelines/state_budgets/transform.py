@@ -368,7 +368,9 @@ def build_states(
         watched = {
             **{f"expenditure.{k}": v for k, v in by_function.items()},
             **{f"revenue.{k}": v for k, v in revenue_by_source.items()},
-            **{f"debt.{k}": v for k, v in debt_out.items()},
+            # Only new borrowing: debt retired and opening balances move for
+            # accounting reasons rather than because anything happened.
+            **{f"debt.{k}": v for k, v in debt_out.items() if k == "issued"},
         }
         budget_by_year = [sum(v[i] for v in by_function.values()) for i in range(len(years))]
         found = anomalies.detect(watched, years, budget_by_year)
