@@ -27,7 +27,7 @@ def test_deflator_is_rebased_so_the_last_year_is_one(tmp_path):
     path = tmp_path / "deflator.csv"
     path.write_text(
         "observation_date,A191RD3A086NBEA\n"
-        "2000-01-01,50.0\n"
+        "2012-01-01,50.0\n"
         "2023-01-01,75.0\n"
         "2024-01-01,100.0\n"
     )
@@ -50,12 +50,12 @@ def test_population_skips_the_age_and_sex_breakdown_rows(tmp_path):
     the all-zero total row is a state total."""
     path = tmp_path / "intercensal.csv"
     path.write_text(
-        "STATE,NAME,SEX,ORIGIN,RACE,AGEGRP,POPESTIMATE2005\n"
+        "STATE,NAME,SEX,ORIGIN,RACE,AGEGRP,POPESTIMATE2015\n"
         "06,California,0,0,0,0,35000000\n"
         "06,California,1,0,0,3,900000\n"
     )
     frame = transform.load_population([path])
-    assert frame.to_dicts() == [{"abbr": "CA", "year": 2005, "population": 35000000}]
+    assert frame.to_dicts() == [{"abbr": "CA", "year": 2015, "population": 35000000}]
 
 
 def test_governors_drops_terms_without_a_start_date(tmp_path):

@@ -48,7 +48,10 @@ SELECT ?stateLabel ?person ?personLabel ?partyLabel ?start ?end WHERE {
   OPTIONAL { ?stmt pq:P582 ?end . }
   OPTIONAL { ?person wdt:P102 ?party . }
   FILTER(!BOUND(?end) || ?end >= "1995-01-01T00:00:00Z"^^xsd:dateTime)
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+  # "mul" is the fallback because some people have no English label at all —
+  # Arnold Schwarzenegger (Q2685) has labels in 70 languages, none of them
+  # English — and the label service then returns the bare Q-id as the name.
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,mul,en-gb". }
 }
 """
 

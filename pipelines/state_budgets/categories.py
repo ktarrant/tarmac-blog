@@ -25,6 +25,8 @@ SPENDING_PREFIXES = {
     "G": "capital_other",
     "I": "interest_on_debt",
     "J": "subsidies",
+    "K": "equipment",
+    "L": "aid_to_state_governments",
     "M": "aid_to_local",
     "Q": "aid_to_school_districts",
     "S": "aid_to_federal",
@@ -55,6 +57,7 @@ FUNCTIONS = {
     "23": "administration",
     "24": "public_safety",      # local fire protection
     "25": "administration",     # judicial and legal
+    "26": "administration",     # legislative bodies
     "29": "administration",
     "30": "administration",
     "31": "administration",
@@ -66,11 +69,17 @@ FUNCTIONS = {
     "46": "transportation",
     "50": "housing_and_community",
     "52": "other",              # libraries
+    "54": "natural_resources",  # agriculture
+    "55": "natural_resources",  # state fish and game
+    "56": "natural_resources",  # federal and state forestry
     "59": "natural_resources",
     "60": "other",              # parking
     "61": "parks_and_recreation",
     "62": "public_safety",
     "66": "other",              # protective inspection
+    "67": "public_welfare",     # federal categorical assistance programs
+    "68": "public_welfare",     # other cash assistance
+    "73": "public_welfare",
     "74": "public_welfare",
     "75": "public_welfare",
     "77": "public_welfare",
@@ -86,6 +95,13 @@ FUNCTIONS = {
     "93": "utilities",
     "94": "transportation",     # transit
 }
+
+# Census leaves function 27 out of its published total expenditure (SF0132).
+# Excluding it reproduces that total to the dollar for all 50 states; including
+# it overstates spending by roughly half a percent. The function has no entry
+# in the 2006 classification manual or the FY2024 documentation, so it is
+# excluded on the strength of that reconciliation rather than a definition.
+EXCLUDED_FROM_EXPENDITURE = {"27"}
 
 # Debt and cash codes don't follow the prefix/function scheme.
 DEBT_CODES = {
@@ -126,7 +142,7 @@ def classify(item_code: str) -> dict[str, str] | None:
 
     if prefix in SPENDING_PREFIXES:
         return {
-            "flow": "expenditure",
+            "flow": "expenditure_excluded" if digits in EXCLUDED_FROM_EXPENDITURE else "expenditure",
             "function": FUNCTIONS.get(digits, "other"),
             "component": SPENDING_PREFIXES[prefix],
         }

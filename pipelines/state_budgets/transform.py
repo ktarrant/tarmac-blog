@@ -11,9 +11,9 @@ from pathlib import Path
 
 import polars as pl
 
-from . import fetch
+from . import categories, fetch
 from .paths import END_YEAR, OUT_DIR, RAW_DIR, REPO_ROOT, START_YEAR, YEARS
-from .states import ABBRS, NAME_BY_ABBR, STATES
+from .states import ABBRS, ABBRS_50, NAME_BY_ABBR, STATES
 
 # Wikidata reports party membership over a person's whole career, so a
 # party-switcher yields one row per party. These labels are normalized and
@@ -60,6 +60,70 @@ def load_population(paths: list[Path] | None = None) -> pl.DataFrame:
         .unique(subset=["abbr", "year"], keep="first")
         .sort(["abbr", "year"])
     )
+
+
+def load_finances(years: range | None = None) -> pl.DataFrame:
+    """State government finances, long format: abbr, year, flow, function,
+    component, item_code, amount (dollars).
+
+    The API returns both detail item codes and Census's own published
+    aggregates (ITEM_CODE 'AGG'); only the detail is kept, since summing it
+    reproduces the published totals exactly (see validate.py) while also
+    supporting the functional breakdowns the aggregates don't provide.
+    """
+    abbr_by_fips = {fips: abbr for fips, (abbr, _) in STATES.items()}
+    rows: list[dict] = []
+
+    for year in years if years is not None else YEARS:
+        payload = json.loads(fetch.state_finances(year).read_text())
+        header, *records = payload
+        for record in records:
+            field = dict(zip(header, record))
+            item_code = field["ITEM_CODE"]
+            if item_code == "AGG":
+                continue
+            classified = categories.classify(item_code)
+            if classified is None:
+                continue
+            abbr = abbr_by_fips.get(field["state"])
+            if abbr is None:
+                continue
+            rows.append(
+                {
+                    "abbr": abbr,
+                    "year": year,
+                    "item_code": item_code,
+                    # Census reports thousands of dollars.
+                    "amount": int(field["AMOUNT"]) * 1000,
+                    **classified,
+                }
+            )
+
+    return pl.DataFrame(rows).sort(["abbr", "year", "item_code"])
+
+
+def load_published_totals(years: range | None = None) -> pl.DataFrame:
+    """Census's own published totals, used to check the detail sums up."""
+    abbr_by_fips = {fips: abbr for fips, (abbr, _) in STATES.items()}
+    wanted = {"SF0001": "revenue", "SF0132": "expenditure"}
+    rows: list[dict] = []
+
+    for year in years if years is not None else YEARS:
+        payload = json.loads(fetch.state_finances(year).read_text())
+        header, *records = payload
+        for record in records:
+            field = dict(zip(header, record))
+            flow = wanted.get(field["AGG_DESC"])
+            if field["ITEM_CODE"] != "AGG" or flow is None:
+                continue
+            abbr = abbr_by_fips.get(field["state"])
+            if abbr is None:
+                continue
+            rows.append(
+                {"abbr": abbr, "year": year, "flow": flow, "published": int(field["AMOUNT"]) * 1000}
+            )
+
+    return pl.DataFrame(rows).sort(["abbr", "year", "flow"])
 
 
 def load_deflator(path: Path | None = None) -> pl.DataFrame:
@@ -161,6 +225,117 @@ def build_politics() -> Path:
     return write_json(OUT_DIR / "politics.json", payload)
 
 
+def _series(frame: pl.DataFrame, abbrs: list[str], years: list[int], value: str) -> list[list[int]]:
+    """Pivot a long frame into states x years, filling gaps with 0."""
+    lookup = {(row["abbr"], row["year"]): row[value] for row in frame.to_dicts()}
+    return [[lookup.get((abbr, year), 0) for year in years] for abbr in abbrs]
+
+
+def build_national(finances: pl.DataFrame, population: pl.DataFrame, deflator: pl.DataFrame) -> Path:
+    """national.json: every state and year, columnar so the site fetches once."""
+    years = list(YEARS)
+    abbrs = [a for a in ABBRS_50 if a in set(finances["abbr"].to_list())]
+
+    totals = (
+        finances.filter(pl.col("flow").is_in(["revenue", "expenditure"]))
+        .group_by(["abbr", "year", "flow"])
+        .agg(pl.col("amount").sum())
+    )
+    by_function = (
+        finances.filter(pl.col("flow") == "expenditure")
+        .group_by(["abbr", "year", "function"])
+        .agg(pl.col("amount").sum())
+    )
+    by_source = (
+        finances.filter(pl.col("flow") == "revenue")
+        .group_by(["abbr", "year", "component"])
+        .agg(pl.col("amount").sum())
+    )
+
+    payload = {
+        "years": years,
+        "states": abbrs,
+        "names": {abbr: NAME_BY_ABBR[abbr] for abbr in abbrs},
+        "deflator": [
+            deflator.filter(pl.col("year") == year)["deflator"].item() for year in years
+        ],
+        "population": _series(population, abbrs, years, "population"),
+        "totals": {
+            flow: _series(totals.filter(pl.col("flow") == flow), abbrs, years, "amount")
+            for flow in ("revenue", "expenditure")
+        },
+        "expenditure_by_function": {
+            function: _series(
+                by_function.filter(pl.col("function") == function), abbrs, years, "amount"
+            )
+            for function in sorted(by_function["function"].unique().to_list())
+        },
+        "revenue_by_source": {
+            component: _series(
+                by_source.filter(pl.col("component") == component), abbrs, years, "amount"
+            )
+            for component in sorted(by_source["component"].unique().to_list())
+        },
+    }
+    return write_json(OUT_DIR / "national.json", payload)
+
+
+def build_states(finances: pl.DataFrame, population: pl.DataFrame, governors: pl.DataFrame) -> list[Path]:
+    """states/{abbr}.json: everything one state page needs, in one fetch."""
+    years = list(YEARS)
+    paths = []
+
+    for abbr in ABBRS_50:
+        state = finances.filter(pl.col("abbr") == abbr)
+        if state.is_empty():
+            continue
+
+        def by(column: str, flow: str) -> dict[str, list[int]]:
+            grouped = (
+                state.filter(pl.col("flow") == flow)
+                .group_by([column, "year"])
+                .agg(pl.col("amount").sum())
+            )
+            out = {}
+            for key in sorted(grouped[column].unique().to_list()):
+                rows = grouped.filter(pl.col(column) == key)
+                lookup = dict(zip(rows["year"].to_list(), rows["amount"].to_list()))
+                out[key] = [lookup.get(year, 0) for year in years]
+            return out
+
+        debt = (
+            state.filter(pl.col("flow") == "debt")
+            .group_by(["component", "year"])
+            .agg(pl.col("amount").sum())
+        )
+        debt_out = {}
+        for component in sorted(debt["component"].unique().to_list()):
+            rows = debt.filter(pl.col("component") == component)
+            lookup = dict(zip(rows["year"].to_list(), rows["amount"].to_list()))
+            debt_out[component] = [lookup.get(year, 0) for year in years]
+
+        pop = population.filter(pl.col("abbr") == abbr)
+        pop_lookup = dict(zip(pop["year"].to_list(), pop["population"].to_list()))
+
+        payload = {
+            "abbr": abbr,
+            "name": NAME_BY_ABBR[abbr],
+            "years": years,
+            "population": [pop_lookup.get(year, 0) for year in years],
+            "expenditure_by_function": by("function", "expenditure"),
+            "expenditure_by_component": by("component", "expenditure"),
+            "revenue_by_source": by("component", "revenue"),
+            "debt": debt_out,
+            "governors": [
+                {k: v for k, v in term.items() if k != "abbr"}
+                for term in governors.filter(pl.col("abbr") == abbr).to_dicts()
+            ],
+        }
+        paths.append(write_json(OUT_DIR / "states" / f"{abbr}.json", payload))
+
+    return paths
+
+
 def build_geo() -> Path:
     """geo/us-states.json: TopoJSON of the 50 states + DC.
 
@@ -188,9 +363,15 @@ def build_sources() -> Path:
             "vintage": f"FY{START_YEAR}–FY{END_YEAR}",
             "retrieved": retrieved(RAW_DIR / "census-finance" / f"{END_YEAR}.json"),
             "notes": (
-                "Revenue by source, expenditure by function and debt outstanding. Census "
-                "covers all funds, including insurance-trust and utility activity, so totals "
-                "differ from budget documents."
+                "Revenue by source, expenditure by function and debt outstanding. Totals are "
+                "computed from the detail item codes on one consistent definition across all "
+                "years — general revenue and expenditure, with insurance-trust flows (public "
+                "pensions, unemployment and workers' compensation) reported separately — "
+                "because Census changed what its own published totals include between FY2021 "
+                "and FY2022. For FY2022 onward, where the definitions agree, these totals "
+                "reproduce the published figures exactly for all 50 states. Census counts "
+                "differ from state budget documents: they cover all funds and follow a common "
+                "classification rather than each state's own budget categories."
             ),
         },
         {
@@ -229,7 +410,16 @@ def build_sources() -> Path:
 
 
 def build() -> list[Path]:
-    return [build_politics(), build_geo(), build_sources()]
+    finances = load_finances()
+    population = load_population()
+    governors = load_governors()
+    return [
+        build_national(finances, population, load_deflator()),
+        *build_states(finances, population, governors),
+        build_politics(),
+        build_geo(),
+        build_sources(),
+    ]
 
 
 if __name__ == "__main__":

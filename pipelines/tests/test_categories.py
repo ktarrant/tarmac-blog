@@ -52,6 +52,14 @@ def test_cash_and_security_holdings_are_excluded():
         assert categories.classify(code) is None
 
 
+def test_function_27_is_kept_out_of_the_expenditure_total():
+    """Census omits function 27 from published total expenditure; including it
+    overstates spending ~0.5% and breaks reconciliation against SF0132."""
+    assert categories.classify("E27")["flow"] == "expenditure_excluded"
+    assert categories.classify("M27")["flow"] == "expenditure_excluded"
+    assert categories.classify("E44")["flow"] == "expenditure"
+
+
 def test_insurance_trust_is_kept_apart_from_the_general_budget():
     assert categories.classify("Y05")["flow"] == "insurance_trust"
 

@@ -11,7 +11,7 @@ from datetime import date
 import polars as pl
 
 from . import transform
-from .paths import YEARS
+from .paths import PUBLISHED_TOTALS_COMPARABLE_FROM, YEARS
 from .states import ABBRS, ABBRS_50
 
 # Wikidata term boundaries disagree with each other by a few days where
@@ -47,6 +47,14 @@ def check_governors(problems: list[str]) -> None:
     if missing_states:
         problems.append(f"governors: no terms for {sorted(missing_states)}")
 
+    # A bare Q-id means Wikidata's label service found no label in any of the
+    # languages we ask for, and the name would render as "Q2685" on the page.
+    for row in frame.filter(pl.col("name").str.contains(r"^Q\d+$")).to_dicts():
+        problems.append(
+            f"governors: {row['abbr']} {row['start']} has an unresolved Wikidata id "
+            f"({row['name']}) instead of a name"
+        )
+
     unresolved = frame.filter(pl.col("party").is_null())
     for row in unresolved.to_dicts():
         problems.append(
@@ -77,11 +85,69 @@ def check_governors(problems: list[str]) -> None:
                 problems.append(f"governors: {abbr} has nobody in office on {reference}")
 
 
+def check_finances(problems: list[str]) -> None:
+    finances = transform.load_finances()
+    published = transform.load_published_totals()
+
+    for abbr in ABBRS_50:
+        years = set(finances.filter(pl.col("abbr") == abbr)["year"].to_list())
+        missing = set(YEARS) - years
+        if missing:
+            problems.append(f"finances: {abbr} missing years {sorted(missing)}")
+
+    totals = (
+        finances.filter(pl.col("flow").is_in(["revenue", "expenditure"]))
+        .group_by(["abbr", "year", "flow"])
+        .agg(pl.col("amount").sum())
+    )
+
+    # Summing the detail item codes must reproduce Census's published totals
+    # exactly, for the years whose definitions match ours. This is what catches
+    # a miscategorized item code.
+    comparable = totals.join(published, on=["abbr", "year", "flow"], how="inner").filter(
+        pl.col("year") >= PUBLISHED_TOTALS_COMPARABLE_FROM
+    )
+    mismatched = comparable.filter(pl.col("amount") != pl.col("published"))
+    for row in mismatched.head(10).to_dicts():
+        share = (row["amount"] - row["published"]) / row["published"] if row["published"] else float("inf")
+        problems.append(
+            f"finances: {row['abbr']} {row['year']} {row['flow']} sums to {row['amount']:,} "
+            f"but Census publishes {row['published']:,} ({share:+.3%})"
+        )
+    if mismatched.height > 10:
+        problems.append(f"finances: ...and {mismatched.height - 10} more total mismatches")
+
+    expected = len(ABBRS_50) * len([y for y in YEARS if y >= PUBLISHED_TOTALS_COMPARABLE_FROM]) * 2
+    if comparable.height < expected:
+        problems.append(
+            f"finances: only {comparable.height} state-year-flow totals could be checked "
+            f"against published figures, expected {expected}"
+        )
+
+    # Earlier years can't be checked against published totals (see paths.py), so
+    # check the series is continuous instead: a mapping that silently dropped
+    # codes in one era would show up as a step change here.
+    national = (
+        totals.group_by(["year", "flow"]).agg(pl.col("amount").sum()).sort(["flow", "year"])
+    )
+    for flow in ("revenue", "expenditure"):
+        series = national.filter(pl.col("flow") == flow).sort("year")
+        amounts = series["amount"].to_list()
+        for year, before, after in zip(series["year"].to_list()[1:], amounts, amounts[1:]):
+            change = (after - before) / before
+            if not -0.10 < change < 0.25:
+                problems.append(
+                    f"finances: national {flow} moved {change:+.1%} into {year} — "
+                    "implausible for a real fiscal year, suspect a mapping break"
+                )
+
+
 def run() -> list[str]:
     problems: list[str] = []
     check_population(problems)
     check_deflator(problems)
     check_governors(problems)
+    check_finances(problems)
     return problems
 
 
