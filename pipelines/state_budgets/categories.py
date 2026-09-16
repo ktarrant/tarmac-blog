@@ -42,7 +42,7 @@ REVENUE_PREFIXES = {
 
 # Trailing digits -> reporting function.
 FUNCTIONS = {
-    "01": "transportation",     # air transportation
+    "01": "airports_and_ports",
     # "Miscellaneous commercial activities, NEC" in Census's classification,
     # which explicitly covers state disaster insurance. It is where Florida's
     # post-Hurricane-Ian property insurance intervention lands, so it earns its
@@ -68,9 +68,14 @@ FUNCTIONS = {
     "32": "health_and_hospitals",
     "36": "health_and_hospitals",
     "42": "health_and_hospitals",
-    "44": "transportation",
-    "45": "transportation",
-    "46": "transportation",
+    # Transport modes are kept apart rather than lumped together. They are the
+    # largest slice of most states' capital spending, and a single
+    # "transportation" bucket hides the thing worth seeing: a transit line
+    # starting or stopping, or a toll network that pays for itself while the
+    # free highways beside it do not.
+    "44": "highways",
+    "45": "toll_highways",
+    "46": "highways",
     "50": "housing_and_community",
     "52": "other",              # libraries
     "54": "natural_resources",  # agriculture
@@ -91,13 +96,13 @@ FUNCTIONS = {
     "80": "utilities",          # sewerage
     "81": "utilities",          # solid waste
     "85": "other",              # veterans' assistance
-    "87": "transportation",     # water transport and terminals
+    "87": "airports_and_ports",  # water transport and terminals
     "89": "other",
     "90": "utilities",          # liquor stores
     "91": "utilities",
     "92": "utilities",
     "93": "utilities",
-    "94": "transportation",     # transit
+    "94": "transit",
 }
 
 # Which side of the budget a kind of spending sits on. This is the distinction

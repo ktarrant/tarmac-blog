@@ -487,6 +487,14 @@ def build_states(
             lookup_ = dict(zip(rows_["year"].to_list(), rows_["amount"].to_list()))
             capital_by_function[function] = [lookup_.get(year, 0) for year in years]
 
+        operating_by_function = {
+            function: [
+                value - capital_by_function.get(function, [0] * len(years))[i]
+                for i, value in enumerate(series)
+            ]
+            for function, series in by_function.items()
+        }
+
         # Operating and capital move for different reasons and are funded
         # differently, so the page needs them apart rather than as one total.
         spending_split = {"operating": [0] * len(years), "capital": [0] * len(years)}
@@ -504,7 +512,14 @@ def build_states(
             # reallocation inside the operating budget from the kind of spending
             # that borrowing pays for.
             **{f"spending.{k}": v for k, v in spending_split.items()},
-            **{f"expenditure.{k}": v for k, v in by_function.items()},
+            # Operating and capital are watched apart rather than as one
+            # "expenditure" line per function. They move for different reasons,
+            # and combining them hides the capital events: Maryland's transit
+            # capital doubled in FY2022 when the Purple Line restarted, but the
+            # much larger operating subsidy beside it dampened the combined
+            # figure to a 21% change that no threshold would catch.
+            **{f"operating.{k}": v for k, v in operating_by_function.items()},
+            **{f"capital.{k}": v for k, v in capital_by_function.items()},
             **{f"revenue.{k}": v for k, v in revenue_by_source.items()},
             # Only new borrowing: debt retired and opening balances move for
             # accounting reasons rather than because anything happened.

@@ -61,6 +61,10 @@ export function label(key: string): string {
     public_safety: "Public safety",
     education_other: "Other education",
     commercial_and_insurance: "Commercial & insurance programs",
+    toll_highways: "Toll roads",
+    airports_and_ports: "Airports & ports",
+    highways: "Highways",
+    transit: "Transit",
     federal_aid: "Federal aid",
     misc_general_revenue: "Miscellaneous",
     local_aid_received: "Local transfers",
@@ -82,16 +86,17 @@ export function label(key: string): string {
 export function anomalyLabel(metric: string): string {
   const [flow, key] = metric.split(".");
   if (flow === "spending") {
-    return key === "capital" ? "Capital spending" : "Operating spending";
+    return key === "capital" ? "Capital spending, all of it" : "Operating spending, all of it";
   }
-  const flowLabel = { expenditure: "Spending", revenue: "Revenue", debt: "Debt" }[flow] ?? flow;
+  const flowLabel =
+    { operating: "Operating", capital: "Building", revenue: "Revenue", debt: "Debt" }[flow] ?? flow;
   return `${flowLabel} · ${label(key)}`;
 }
 
 /** Which side of the budget a movement sits on — what a reader needs in order
  *  to tell a reallocation from something that gets paid for by borrowing. */
 export function budgetSide(metric: string): "operating" | "capital" | "borrowing" | "revenue" {
-  if (metric === "spending.capital") return "capital";
+  if (metric === "spending.capital" || metric.startsWith("capital.")) return "capital";
   if (metric.startsWith("debt.")) return "borrowing";
   if (metric.startsWith("revenue.")) return "revenue";
   return "operating";
@@ -99,7 +104,7 @@ export function budgetSide(metric: string): "operating" | "capital" | "borrowing
 
 export const SIDE_NOTE: Record<string, string> = {
   operating: "Operating budget — has to balance, so this is money moved rather than money borrowed",
-  capital: "Capital — building things, which is what borrowing pays for",
+  capital: "Capital — building something, which is what borrowing pays for",
   borrowing: "Borrowing — changes what the state owes, not what it spends running",
   revenue: "Revenue — money coming in",
 };

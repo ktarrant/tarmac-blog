@@ -27,7 +27,17 @@ def test_medicaid_lands_in_public_welfare():
 
 def test_same_function_digits_across_prefixes_agree():
     for code in ("E44", "F44", "M44"):
-        assert categories.classify(code)["function"] == "transportation"
+        assert categories.classify(code)["function"] == "highways"
+
+
+def test_transport_modes_are_kept_apart():
+    """Transport is the largest slice of most states' capital spending, and one
+    combined bucket hides what is worth seeing -- a transit line starting, or a
+    toll network that pays for itself while the free roads beside it don't."""
+    assert categories.classify("F44")["function"] == "highways"
+    assert categories.classify("F45")["function"] == "toll_highways"
+    assert categories.classify("F94")["function"] == "transit"
+    assert categories.classify("F01")["function"] == "airports_and_ports"
 
 
 def test_federal_aid_is_revenue_not_expenditure():
