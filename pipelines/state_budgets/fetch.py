@@ -34,6 +34,8 @@ POPULATION_FILES = {
 }
 DEFLATOR_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=A191RD3A086NBEA"
 WIKIDATA_SPARQL = "https://query.wikidata.org/sparql"
+FEMA_DECLARATIONS = "https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries"
+FEMA_SUMMARIES = "https://www.fema.gov/api/open/v1/FemaWebDisasterSummaries"
 
 GOVERNORS_QUERY = """
 SELECT ?stateLabel ?person ?personLabel ?partyLabel ?start ?end WHERE {
@@ -177,6 +179,64 @@ def governors() -> Path:
         )
         response.raise_for_status()
         dest.write_bytes(response.content)
+    return dest
+
+
+def disasters(start_year: int) -> Path:
+    """FEMA disaster declarations, deduplicated to one row per state per disaster.
+
+    The API returns one row per affected county, so a single hurricane can be
+    hundreds of rows; they collapse to the state level here.
+    """
+    dest = RAW_DIR / "fema" / "declarations.json"
+    if dest.exists():
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    collected: dict[str, dict] = {}
+    page_size, skip = 1000, 0
+    with httpx.Client(timeout=120, headers={"User-Agent": USER_AGENT}, follow_redirects=True) as client:
+        while True:
+            response = client.get(
+                FEMA_DECLARATIONS,
+                params={
+                    "$filter": f"fyDeclared ge {start_year}",
+                    "$select": "disasterNumber,state,declarationDate,incidentType,"
+                    "declarationTitle,declarationType",
+                    "$top": page_size,
+                    "$skip": skip,
+                },
+            )
+            response.raise_for_status()
+            batch = response.json().get("DisasterDeclarationsSummaries", [])
+            if not batch:
+                break
+            for record in batch:
+                collected.setdefault(f"{record['state']}-{record['disasterNumber']}", record)
+            skip += page_size
+
+    dest.write_text(json.dumps(sorted(collected.values(), key=lambda r: r["declarationDate"])))
+    return dest
+
+
+def disaster_amounts(disaster_numbers: list[int]) -> Path:
+    """Federal dollars obligated per disaster, for the declarations we kept."""
+    dest = RAW_DIR / "fema" / "amounts.json"
+    if dest.exists():
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    collected: list[dict] = []
+    with httpx.Client(timeout=120, headers={"User-Agent": USER_AGENT}, follow_redirects=True) as client:
+        # The filter is a URL parameter, so ask for a manageable number at a time.
+        for start in range(0, len(disaster_numbers), 40):
+            chunk = disaster_numbers[start : start + 40]
+            clause = " or ".join(f"disasterNumber eq {n}" for n in chunk)
+            response = client.get(FEMA_SUMMARIES, params={"$filter": clause, "$top": 1000})
+            response.raise_for_status()
+            collected.extend(response.json().get("FemaWebDisasterSummaries", []))
+
+    dest.write_text(json.dumps(collected))
     return dest
 
 

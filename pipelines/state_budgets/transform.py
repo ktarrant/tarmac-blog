@@ -11,7 +11,7 @@ from pathlib import Path
 
 import polars as pl
 
-from . import categories, fetch
+from . import anomalies, categories, fetch
 from .paths import END_YEAR, OUT_DIR, RAW_DIR, REPO_ROOT, START_YEAR, YEARS
 from .states import ABBRS, ABBRS_50, NAME_BY_ABBR, STATES
 
@@ -225,6 +225,44 @@ def build_politics() -> Path:
     return write_json(OUT_DIR / "politics.json", payload)
 
 
+def load_disasters() -> dict[str, dict[int, list[dict]]]:
+    """FEMA disasters keyed by state and the state fiscal year they fall in."""
+    declarations = json.loads(fetch.disasters(START_YEAR).read_text())
+    amounts_by_number = {
+        record["disasterNumber"]: record
+        for record in json.loads(
+            fetch.disaster_amounts(sorted({d["disasterNumber"] for d in declarations})).read_text()
+        )
+    }
+
+    by_state: dict[str, dict[int, list[dict]]] = {}
+    for record in declarations:
+        abbr = record["state"]
+        if abbr not in NAME_BY_ABBR:
+            continue
+        declared = date.fromisoformat(record["declarationDate"][:10])
+        year = anomalies.fiscal_year(abbr, declared)
+        if year not in YEARS:
+            continue
+        summary = amounts_by_number.get(record["disasterNumber"], {})
+        by_state.setdefault(abbr, {}).setdefault(year, []).append(
+            {
+                "number": record["disasterNumber"],
+                "title": record["declarationTitle"].title(),
+                "type": record["incidentType"],
+                "declared": declared.isoformat(),
+                "major": record["declarationType"] == "DR",
+                "federal_obligated": int(summary.get("totalObligatedAmountPa") or 0),
+                "individual_approved": int(summary.get("totalAmountIhpApproved") or 0),
+            }
+        )
+
+    for years in by_state.values():
+        for entries in years.values():
+            entries.sort(key=lambda d: -d["federal_obligated"])
+    return by_state
+
+
 def _series(frame: pl.DataFrame, abbrs: list[str], years: list[int], value: str) -> list[list[int]]:
     """Pivot a long frame into states x years, filling gaps with 0."""
     lookup = {(row["abbr"], row["year"]): row[value] for row in frame.to_dicts()}
@@ -280,7 +318,12 @@ def build_national(finances: pl.DataFrame, population: pl.DataFrame, deflator: p
     return write_json(OUT_DIR / "national.json", payload)
 
 
-def build_states(finances: pl.DataFrame, population: pl.DataFrame, governors: pl.DataFrame) -> list[Path]:
+def build_states(
+    finances: pl.DataFrame,
+    population: pl.DataFrame,
+    governors: pl.DataFrame,
+    disasters: dict[str, dict[int, list[dict]]],
+) -> list[Path]:
     """states/{abbr}.json: everything one state page needs, in one fetch."""
     years = list(YEARS)
     paths = []
@@ -317,19 +360,36 @@ def build_states(finances: pl.DataFrame, population: pl.DataFrame, governors: pl
         pop = population.filter(pl.col("abbr") == abbr)
         pop_lookup = dict(zip(pop["year"].to_list(), pop["population"].to_list()))
 
+        by_function = by("function", "expenditure")
+        revenue_by_source = by("component", "revenue")
+
+        # Anomalies are looked for in the functional breakdown plus the headline
+        # series, since a debt issuance spike is one of the most telling signals.
+        watched = {
+            **{f"expenditure.{k}": v for k, v in by_function.items()},
+            **{f"revenue.{k}": v for k, v in revenue_by_source.items()},
+            **{f"debt.{k}": v for k, v in debt_out.items()},
+        }
+        budget_by_year = [sum(v[i] for v in by_function.values()) for i in range(len(years))]
+        found = anomalies.detect(watched, years, budget_by_year)
+        state_disasters = disasters.get(abbr, {})
+
         payload = {
             "abbr": abbr,
             "name": NAME_BY_ABBR[abbr],
             "years": years,
+            "fiscal_year_start_month": anomalies.fiscal_year_starts().get(abbr, 7),
             "population": [pop_lookup.get(year, 0) for year in years],
-            "expenditure_by_function": by("function", "expenditure"),
+            "expenditure_by_function": by_function,
             "expenditure_by_component": by("component", "expenditure"),
-            "revenue_by_source": by("component", "revenue"),
+            "revenue_by_source": revenue_by_source,
             "debt": debt_out,
             "governors": [
                 {k: v for k, v in term.items() if k != "abbr"}
                 for term in governors.filter(pl.col("abbr") == abbr).to_dicts()
             ],
+            "anomalies": anomalies.as_dicts(found),
+            "disasters": {str(year): entries for year, entries in sorted(state_disasters.items())},
         }
         paths.append(write_json(OUT_DIR / "states" / f"{abbr}.json", payload))
 
@@ -415,7 +475,7 @@ def build() -> list[Path]:
     governors = load_governors()
     return [
         build_national(finances, population, load_deflator()),
-        *build_states(finances, population, governors),
+        *build_states(finances, population, governors, load_disasters()),
         build_politics(),
         build_geo(),
         build_sources(),
