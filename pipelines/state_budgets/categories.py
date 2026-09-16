@@ -128,13 +128,29 @@ BUDGET_SIDE = {
 EXCLUDED_FROM_EXPENDITURE = {"27"}
 
 # Debt and cash codes don't follow the prefix/function scheme.
+#
+# Long-term debt is reported in two tracks that have to be added to get a total:
+# the T codes are full-faith-and-credit debt (general obligation, backed by the
+# state's taxing power) and the U codes are nonguaranteed (revenue bonds and
+# similar, repaid from a specific stream). Census's own published total, SF0455,
+# equals T + U — taking U alone understates a state's debt by the whole general
+# obligation share, which for Maryland in FY2021 was $10.8B of $30.7B.
+#
+# From FY2022 the T codes stop: Census dropped conduit debt not guaranteed by
+# the issuer after a GASB pronouncement, and folded what remained into the U
+# series. So the guaranteed/nonguaranteed split exists only through FY2021, and
+# the total legitimately steps down in FY2022.
 DEBT_CODES = {
-    "19U": ("long_term_debt", "outstanding_beginning"),
-    "29U": ("long_term_debt", "issued"),
-    "39U": ("long_term_debt", "retired"),
-    "49U": ("long_term_debt", "outstanding_end"),
-    "61V": ("short_term_debt", "outstanding_beginning"),
-    "64V": ("short_term_debt", "outstanding_end"),
+    "19T": ("long_term_debt", "outstanding_beginning", "full_faith_and_credit"),
+    "24T": ("long_term_debt", "issued", "full_faith_and_credit"),
+    "34T": ("long_term_debt", "retired", "full_faith_and_credit"),
+    "44T": ("long_term_debt", "outstanding_end", "full_faith_and_credit"),
+    "19U": ("long_term_debt", "outstanding_beginning", "nonguaranteed"),
+    "29U": ("long_term_debt", "issued", "nonguaranteed"),
+    "39U": ("long_term_debt", "retired", "nonguaranteed"),
+    "49U": ("long_term_debt", "outstanding_end", "nonguaranteed"),
+    "61V": ("short_term_debt", "outstanding_beginning", "short_term"),
+    "64V": ("short_term_debt", "outstanding_end", "short_term"),
 }
 
 # The insurance-trust system (unemployment, workers' comp, pensions) is a
@@ -156,19 +172,30 @@ def classify(item_code: str) -> dict[str, str] | None:
     holdings, and anything unrecognized), so callers can ignore them.
     """
     if item_code in DEBT_CODES:
-        kind, component = DEBT_CODES[item_code]
-        return {"flow": "debt", "function": kind, "component": component}
+        kind, component, guarantee = DEBT_CODES[item_code]
+        return {
+            "flow": "debt",
+            "function": kind,
+            "component": component,
+            "guarantee": guarantee,
+        }
 
     prefix, digits = item_code[0], item_code[1:]
 
     if prefix in INSURANCE_TRUST_PREFIXES:
-        return {"flow": "insurance_trust", "function": "insurance_trust", "component": item_code}
+        return {
+            "flow": "insurance_trust",
+            "function": "insurance_trust",
+            "component": item_code,
+            "guarantee": None,
+        }
 
     if prefix in SPENDING_PREFIXES:
         return {
             "flow": "expenditure_excluded" if digits in EXCLUDED_FROM_EXPENDITURE else "expenditure",
             "function": FUNCTIONS.get(digits, "other"),
             "component": SPENDING_PREFIXES[prefix],
+            "guarantee": None,
         }
 
     if prefix in REVENUE_PREFIXES:
@@ -176,6 +203,7 @@ def classify(item_code: str) -> dict[str, str] | None:
             "flow": "revenue",
             "function": FUNCTIONS.get(digits, "other"),
             "component": REVENUE_PREFIXES[prefix],
+            "guarantee": None,
         }
 
     return None

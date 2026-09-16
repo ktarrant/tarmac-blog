@@ -99,13 +99,17 @@ def load_finances(years: range | None = None) -> pl.DataFrame:
                 }
             )
 
-    return pl.DataFrame(rows).sort(["abbr", "year", "item_code"])
+    # guarantee is null for everything except debt, and the debt rows sort late
+    # enough that inferring the column type from the first rows picks Null.
+    return pl.DataFrame(rows, schema_overrides={"guarantee": pl.Utf8}).sort(
+        ["abbr", "year", "item_code"]
+    )
 
 
 def load_published_totals(years: range | None = None) -> pl.DataFrame:
     """Census's own published totals, used to check the detail sums up."""
     abbr_by_fips = {fips: abbr for fips, (abbr, _) in STATES.items()}
-    wanted = {"SF0001": "revenue", "SF0132": "expenditure"}
+    wanted = {"SF0001": "revenue", "SF0132": "expenditure", "SF0455": "debt_outstanding"}
     rows: list[dict] = []
 
     for year in years if years is not None else YEARS:
@@ -357,6 +361,19 @@ def build_states(
             lookup = dict(zip(rows["year"].to_list(), rows["amount"].to_list()))
             debt_out[component] = [lookup.get(year, 0) for year in years]
 
+        # Available only through FY2021: Census stopped reporting the split
+        # when it dropped conduit debt.
+        guarantee = (
+            state.filter((pl.col("flow") == "debt") & (pl.col("component") == "outstanding_end"))
+            .group_by(["guarantee", "year"])
+            .agg(pl.col("amount").sum())
+        )
+        debt_by_guarantee = {}
+        for kind in sorted(guarantee["guarantee"].drop_nulls().unique().to_list()):
+            rows_ = guarantee.filter(pl.col("guarantee") == kind)
+            lookup_ = dict(zip(rows_["year"].to_list(), rows_["amount"].to_list()))
+            debt_by_guarantee[kind] = [lookup_.get(year, 0) for year in years]
+
         pop = population.filter(pl.col("abbr") == abbr)
         pop_lookup = dict(zip(pop["year"].to_list(), pop["population"].to_list()))
 
@@ -403,6 +420,7 @@ def build_states(
             "debt_service": by_component.get("interest_on_debt", [0] * len(years)),
             "revenue_by_source": revenue_by_source,
             "debt": debt_out,
+            "debt_by_guarantee": debt_by_guarantee,
             "governors": [
                 {k: v for k, v in term.items() if k != "abbr"}
                 for term in governors.filter(pl.col("abbr") == abbr).to_dicts()

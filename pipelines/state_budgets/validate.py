@@ -124,6 +124,31 @@ def check_finances(problems: list[str]) -> None:
             f"against published figures, expected {expected}"
         )
 
+    # Debt outstanding has its own published total and its own way of going
+    # wrong: it is reported in two tracks (full faith and credit, nonguaranteed)
+    # that must be added, and summing only one silently understates every state.
+    debt_totals = (
+        finances.filter((pl.col("flow") == "debt") & (pl.col("component") == "outstanding_end"))
+        .group_by(["abbr", "year"])
+        .agg(pl.col("amount").sum())
+        .with_columns(pl.lit("debt_outstanding").alias("flow"))
+    )
+    debt_check = debt_totals.join(published, on=["abbr", "year", "flow"], how="inner")
+    debt_bad = debt_check.filter(pl.col("amount") != pl.col("published"))
+    for row in debt_bad.head(5).to_dicts():
+        share = (row["amount"] - row["published"]) / row["published"] if row["published"] else 0
+        problems.append(
+            f"finances: {row['abbr']} {row['year']} debt outstanding sums to {row['amount']:,} "
+            f"but Census publishes {row['published']:,} ({share:+.3%})"
+        )
+    if debt_bad.height > 5:
+        problems.append(f"finances: ...and {debt_bad.height - 5} more debt total mismatches")
+    if debt_check.height < len(ABBRS_50) * len(YEARS):
+        problems.append(
+            f"finances: only {debt_check.height} state-years of debt could be checked "
+            f"against published totals, expected {len(ABBRS_50) * len(YEARS)}"
+        )
+
     # Earlier years can't be checked against published totals (see paths.py), so
     # check the series is continuous instead: a mapping that silently dropped
     # codes in one era would show up as a step change here.

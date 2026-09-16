@@ -8,6 +8,7 @@
     operating,
     revenue,
     debt,
+    byGuarantee = {},
     population = [],
   }: {
     years: number[];
@@ -15,6 +16,7 @@
     operating: number[];
     revenue: number[];
     debt: Record<string, number[]>;
+    byGuarantee?: Record<string, number[]>;
     population?: number[];
   } = $props();
 
@@ -42,13 +44,21 @@
               (outstanding[i] ?? 0) / population[i]
             ).toLocaleString()} per resident</span>`
           : "";
+        const go = byGuarantee.full_faith_and_credit?.[i] ?? 0;
+        const rev = byGuarantee.nonguaranteed?.[i] ?? 0;
+        // The split stops after FY2021, when Census dropped conduit debt.
+        const split = go
+          ? `<br/><span style="color:${chrome.inkMuted}">of which ${billions(
+              go
+            )} general obligation, ${billions(rev)} revenue-backed</span>`
+          : "";
         return `<strong>FY${years[i]}</strong><br/>
           Owed at year end: <strong>${billions(outstanding[i] ?? 0)}</strong>${perPerson}<br/>
           Net new borrowing: <strong>${billions(net[i])}</strong><br/>
           Capital spending: <strong>${billions(capital[i] ?? 0)}</strong><br/>
           <span style="color:${chrome.inkMuted}">Operating surplus that year: ${billions(
             surplus[i]
-          )}</span>`;
+          )}</span>${split}`;
       },
     },
     xAxis: { type: "category", data: years.map(String) },
@@ -95,5 +105,21 @@
 
 <EChart {option} height="380px" />
 
+{#if byGuarantee.full_faith_and_credit?.some((v) => v > 0)}
+  <p class="note">
+    Total owed steps down in FY2022 because Census stopped counting conduit debt
+    — borrowing a state issues on another body's behalf without guaranteeing it —
+    after a change in accounting standards. That is a change in what is measured,
+    not a repayment. The split between general-obligation and revenue-backed debt
+    stops at the same point.
+  </p>
+{/if}
+
 <style>
+  .note {
+    margin: 0.5rem 0 0;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    max-width: 68ch;
+  }
 </style>
